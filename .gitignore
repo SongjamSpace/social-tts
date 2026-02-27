@@ -1,0 +1,23 @@
+node_modules
+.next
+.env.local
+.env
+.env.production
+.gradle
+# OS files
+.DS_Store
+*.DS_Store
+
+# Build artifacts
+build/
+tsconfig.tsbuildinfo
+
+# PWA / TWA / Android
+*.keystore
+manifest-checksum.txt
+
+# Generated PWA files (if using next-pwa)
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/fallback-*.js

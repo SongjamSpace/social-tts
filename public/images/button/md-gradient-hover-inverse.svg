@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="175" height="40" viewBox="0 0 175 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="175" height="40" rx="8" fill="black" fill-opacity="0.05"/>
+<rect x="0.5" y="0.5" width="174" height="39" rx="7.5" stroke="url(#paint0_linear_2036_145)" stroke-opacity="0.5"/>
+<defs>
+<linearGradient id="paint0_linear_2036_145" x1="87.5" y1="0" x2="87.5" y2="40" gradientUnits="userSpaceOnUse">
+    <animateTransform
+        attributeName="gradientTransform"
+        type="rotate"
+        from="0 87.5 20"
+        to="360 87.5 20"
+        dur="3s"
+        repeatCount="indefinite"
+    />
+    <stop stop-color="black"/>
+    <stop offset="0.5" stop-color="black" stop-opacity="0"/>
+    <stop offset="1" stop-color="black"/>
+</linearGradient>
+</defs>
+</svg> 
