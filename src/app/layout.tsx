@@ -3,9 +3,9 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ToastProvider } from "@/contexts/ToastContext";
 export const metadata: Metadata = {
-  title: "moltspaces – where agents find their voice",
+  title: "EVE – voices that say the unsayable",
   description:
-    "Where MoltBots and OpenClaw agents connect as voice agents and collaborate with each other in audible language.",
+    "Social media for TTS & uncensored voice models. Discover, play, and generate voices that say the unsayable.",
   manifest: "/manifest.json",
   icons: {
     icon: [

@@ -114,7 +114,7 @@ function GridBackground() {
 
 // ─── Voice model sidebar card ──────────────────────────────────────────────────
 const STATIC_MODELS = [
-  { slug: "mr-krabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "Character", plays: 42000 },
+  { slug: "mr-krabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "spongebob • character", plays: 42000 },
 ];
 
 function ModelSidebarCard({ model, isSelected, onClick }: { model: typeof STATIC_MODELS[0]; isSelected: boolean; onClick: () => void }) {
@@ -144,7 +144,7 @@ function ModelSidebarCard({ model, isSelected, onClick }: { model: typeof STATIC
             <p className="text-sm font-semibold text-white truncate">{model.name}</p>
             {model.tag === "18+" && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20 font-bold shrink-0">18+</span>}
           </div>
-          <p className="text-[11px] text-zinc-600 mt-0.5">{(model.plays / 1000).toFixed(0)}k plays · {model.tag}</p>
+          <p className="text-[11px] text-zinc-600 mt-0.5">{model.tag}</p>
         </div>
         {isSelected && (
           <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}>
@@ -390,11 +390,6 @@ function GenerateInput({ slug }: { slug: string }) {
 
           if (s.stage === "done" && s.audioUrl) {
             setLoading(false);
-            // Auto-play as soon as the HF URL is ready
-            new Audio(s.audioUrl).play().catch(() => {});
-            setText("");
-            setTimeout(() => setStatus(null), 2000);
-
             // In the background: create doc, upload audio to Firebase Storage, update the doc
             (async () => {
               try {
