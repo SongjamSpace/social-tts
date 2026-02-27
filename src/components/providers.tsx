@@ -3,7 +3,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useState } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 import { base } from "viem/chains";
+
+const solanaConnectors = toSolanaWalletConnectors();
 
 import { auth, db, logFirebaseEvent } from "@/services/firebase.service";
 import { onAuthStateChanged, TwitterAuthProvider, signInWithPopup, User, getAdditionalUserInfo } from "firebase/auth";
@@ -115,8 +118,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
         supportedChains: [base],
         defaultChain: base,
+        externalWallets: {
+          solana: {
+            connectors: solanaConnectors,
+          },
+        },
         embeddedWallets: {
           ethereum: {
+            createOnLogin: "users-without-wallets",
+          },
+          solana: {
             createOnLogin: "users-without-wallets",
           },
         },

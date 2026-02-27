@@ -19,6 +19,7 @@ import { Mic, Play, Heart, Headphones, Zap, Send } from "lucide-react";
 import { generateTts, TtsStatus } from "@/lib/rvcHf";
 import { auth } from "@/services/firebase.service";
 import { TwitterAuthProvider, signInWithPopup } from "firebase/auth";
+import { usePrivy } from "@privy-io/react-auth";
 
 // ─── Card type derived from Firestore ─────────────────────────────────────────
 type CardSize = "xs" | "sm" | "md" | "lg" | "xl";
@@ -338,6 +339,30 @@ function TtsCard({
   );
 }
 
+// ─── Privy Connect Button ────────────────────────────────────────────────────────
+function PrivyConnectButton() {
+  const { login, authenticated, user, logout } = usePrivy();
+
+  if (authenticated && user) {
+    const solanaAccount = (user.linkedAccounts || []).find(
+      (a: any) => a.type === "wallet" && a.chainType === "solana"
+    ) as any;
+    const address = solanaAccount?.address || user.wallet?.address;
+    const shortAddress = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "Connected";
+    return (
+      <button onClick={logout} className="text-[10px] font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors" title="Click to Logout">
+        {shortAddress}
+      </button>
+    );
+  }
+
+  return (
+    <button onClick={login} className="text-[10px] font-bold px-2 py-1 rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors border border-purple-500/20">
+      Connect Wallet
+    </button>
+  );
+}
+
 // ─── TTS Generate input ────────────────────────────────────────────────────────
 function GenerateInput({ slug }: { slug: string }) {
   const [text, setText] = useState("");
@@ -351,6 +376,7 @@ function GenerateInput({ slug }: { slug: string }) {
     setStatus(null);
 
     const capturedText = text.trim();
+    setText(""); // Clear input immediately after capture
     const voiceModel = "mrkrabs";
     const ttsVoice = "en-US-ChristopherNeural";
 
@@ -494,8 +520,8 @@ export default function AgentsSocialPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const seededRef = useRef(false);
 
-  // Track previous doc IDs to detect new arrivals for auto-play
-  const prevIdsRef = useRef<Set<string>>(new Set());
+  // Track previous doc IDs that were already "done" for auto-play
+  const prevDoneIdsRef = useRef<Set<string>>(new Set());
   // Whether this is the very first snapshot (skip auto-play on initial load)
   const isFirstSnapshotRef = useRef(true);
 
@@ -503,41 +529,37 @@ export default function AgentsSocialPage() {
   useEffect(() => {
     setPlayingId(null);
     setCards([]);
-    prevIdsRef.current = new Set();
+    prevDoneIdsRef.current = new Set();
     isFirstSnapshotRef.current = true;
 
     const unsub = subscribeToTtsResults(activeSlug, (results) => {
       const newCards = results.map(toCard);
-      const newIds = new Set(newCards.map((c) => c.id));
 
       if (!isFirstSnapshotRef.current) {
-        // Find cards that just appeared AND are done (have audio)
-        const arrivedWithAudio = newCards.filter(
-          (c) => !prevIdsRef.current.has(c.id) && c.audio_url && c.status === "done"
+        // Find cards that just arrived OR newly transitioned to "done"
+        const newlyDone = newCards.filter(
+          (c) => !prevDoneIdsRef.current.has(c.id) && c.audio_url && c.status === "done"
         );
-        if (arrivedWithAudio.length > 0) {
-          // Auto-play the most-recently arrived card
-          const newest = arrivedWithAudio[0];
+        if (newlyDone.length > 0) {
+          // Auto-play the most-recently finished card
+          const newest = newlyDone[0];
           setPlayingId(newest.id);
         }
       }
 
-      prevIdsRef.current = newIds;
+      // Track all docs currently done
+      newCards.forEach(c => {
+        if (c.status === "done") {
+          prevDoneIdsRef.current.add(c.id);
+        }
+      });
+      
       isFirstSnapshotRef.current = false;
       setCards(newCards);
     });
 
     return unsub;
   }, [activeSlug]);
-
-  // Also watch for existing cards that transition from processing → done
-  // (when the storage upload patches the doc), and auto-play them
-  useEffect(() => {
-    setCards((prev) => {
-      // Just return unchanged — the effect below handles the play trigger
-      return prev;
-    });
-  }, []);
 
   const handlePlay = useCallback((id: string) => {
     setPlayingId((prev) => {
@@ -643,9 +665,12 @@ export default function AgentsSocialPage() {
 
               {/* Generate */}
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Generate</h2>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Generate</h2>
+                  </div>
+                  <PrivyConnectButton />
                 </div>
                 <GenerateInput slug={activeSlug} />
               </motion.div>
