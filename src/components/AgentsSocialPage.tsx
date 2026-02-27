@@ -8,7 +8,6 @@ import {
 } from "@/services/db/voiceModels.db";
 import {
   subscribeToTtsResults,
-  seedDemoTtsResults,
   incrementPlayCount,
   incrementLikeCount,
   TtsResult,
@@ -318,7 +317,7 @@ function TtsCard({
           </div>
 
           {/* Creator avatar */}
-          {card.username ? (
+          {card.username &&
             <a
               href={`https://x.com/${card.username}`}
               target="_blank"
@@ -332,15 +331,7 @@ function TtsCard({
                 className="w-5 h-5 rounded-full border border-white/10 object-cover opacity-70 hover:opacity-100 transition-opacity"
               />
             </a>
-          ) : (
-            <motion.span
-              className={`hidden sm:inline text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider ${ac.pill}`}
-              animate={isPlaying ? { opacity: [0.6, 1, 0.6] } : { opacity: 0.7 }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              {isPlaying ? "● playing" : isPending ? "⏳ gen…" : "TTS"}
-            </motion.span>
-          )}
+          }
         </div>
       </div>
     </motion.div>
@@ -388,21 +379,6 @@ function GenerateInput({ slug }: { slug: string }) {
       username: (fbUser as any)?.reloadUserInfo?.screenName ?? null,
     };
 
-    // 1️⃣ Create the Firestore doc immediately — the subscription will auto-pick it up
-    let firestoreDocId: string | null = null;
-    try {
-      firestoreDocId = await createTtsResultDoc({
-        text: capturedText,
-        voiceModel,
-        voiceModelSlug: "mr-krabs",
-        voiceModelName: "Mr. Krabs",
-        ttsVoice,
-        createdBy,
-      });
-    } catch (err) {
-      console.warn("Could not create Firestore doc:", err);
-    }
-
     try {
       await generateTts({
         text: capturedText,
@@ -419,18 +395,24 @@ function GenerateInput({ slug }: { slug: string }) {
             setText("");
             setTimeout(() => setStatus(null), 2000);
 
-            // 2️⃣ In the background: upload audio to Firebase Storage and update the doc
-            if (firestoreDocId) {
-              (async () => {
-                try {
-                  const permanentUrl = await uploadTtsAudio(s.audioUrl!, firestoreDocId!);
-                  await updateTtsResultAudioUrl(firestoreDocId!, permanentUrl);
-                  console.log("TTS audio uploaded to Storage:", permanentUrl);
-                } catch (uploadErr) {
-                  console.error("Storage upload failed:", uploadErr);
-                }
-              })();
-            }
+            // In the background: create doc, upload audio to Firebase Storage, update the doc
+            (async () => {
+              try {
+                const docId = await createTtsResultDoc({
+                  text: capturedText,
+                  voiceModel,
+                  voiceModelSlug: "mr-krabs",
+                  voiceModelName: "Mr. Krabs",
+                  ttsVoice,
+                  createdBy,
+                });
+                const permanentUrl = await uploadTtsAudio(s.audioUrl!, docId);
+                await updateTtsResultAudioUrl(docId, permanentUrl);
+                console.log("TTS audio uploaded to Storage:", permanentUrl);
+              } catch (bgErr) {
+                console.error("Background text/audio upload failed:", bgErr);
+              }
+            })();
           }
         },
       });
@@ -521,14 +503,6 @@ export default function AgentsSocialPage() {
   const prevIdsRef = useRef<Set<string>>(new Set());
   // Whether this is the very first snapshot (skip auto-play on initial load)
   const isFirstSnapshotRef = useRef(true);
-
-  // Load Firestore seeds in background (non-blocking)
-  useEffect(() => {
-    if (seededRef.current) return;
-    seededRef.current = true;
-    seedDefaultVoiceModels().catch(() => {});
-    seedDemoTtsResults().catch(() => {});
-  }, []);
 
   // Subscribe to live Firestore tts_results for the active voice model
   useEffect(() => {
