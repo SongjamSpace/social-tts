@@ -126,3 +126,15 @@ export async function generateTts(options: TtsOptions): Promise<void> {
 
   console.log("=== ALL JOB EVENTS (copy-paste below) ===\n" + JSON.stringify(eventLogs, null, 2));
 }
+
+/**
+ * Download and process a voice model via the HF space's /_wrapped_fn_7 endpoint
+ */
+export async function downloadAndProcessVoiceModel(modelUrl: string, modelName: string) {
+  const client = await Client.connect(HF_SPACE);
+  const result = await client.predict("/_wrapped_fn_7", {
+    param_0: modelUrl,
+    param_1: modelName,
+  });
+  return result;
+}

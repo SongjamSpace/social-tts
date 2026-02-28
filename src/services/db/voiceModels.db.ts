@@ -8,6 +8,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
   limit,
 } from "firebase/firestore";
 import { db } from "@/services/firebase.service";
@@ -23,6 +24,7 @@ export interface TtsVoiceModel {
   creator_wallet?: string;
   split_wallet?: string;
   image_url?: string;
+  deployed?: boolean;
   created_at: Timestamp;
 }
 
@@ -35,6 +37,11 @@ export async function addTtsVoiceModel(data: Omit<TtsVoiceModel, "created_at" | 
     created_at: Timestamp.now(),
   });
   return newDocRef.id;
+}
+
+export async function updateTtsVoiceModel(id: string, data: Partial<Omit<TtsVoiceModel, "id" | "created_at">>) {
+  const docRef = doc(db, "tts_voice_models", id);
+  await updateDoc(docRef, data);
 }
 
 export function subscribeToTtsVoiceModels(callback: (models: TtsVoiceModel[]) => void) {
