@@ -123,11 +123,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
             connectors: solanaConnectors,
           },
         },
-        // embeddedWallets: {
-        //   solana: {
-        //     createOnLogin: "users-without-wallets",
-        //   },
-        // },
       }}
     >
       <AuthProvider>

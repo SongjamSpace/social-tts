@@ -20,7 +20,8 @@ import { Mic, Play, Heart, Headphones, Zap, Send } from "lucide-react";
 import { generateTts, TtsStatus } from "@/lib/rvcHf";
 import { auth } from "@/services/firebase.service";
 import { TwitterAuthProvider, signInWithPopup } from "firebase/auth";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useWallets } from "@privy-io/react-auth/solana";
 import AddVoiceModal from "./AddVoiceModal";
 
 // ─── Card type derived from Firestore ─────────────────────────────────────────
@@ -122,6 +123,7 @@ export interface AppModel {
   avatar?: string | null;
   tag?: string;
   plays?: number;
+  tokenAddress?: string | null;
 }
 
 const STATIC_MODELS: AppModel[] = [
@@ -509,10 +511,15 @@ export default function AgentsSocialPage() {
 
   const [ttsVoiceModels, setTtsVoiceModels] = useState<TtsVoiceModel[]>([]);
   const [isAddVoiceModalOpen, setIsAddVoiceModalOpen] = useState(false);
-  const { authenticated, login, logout } = usePrivy();
+  const { authenticated, login, logout, user, connectWallet } = usePrivy();
   const { wallets } = useWallets();
-  const connectedAddress = wallets[0]?.address;
-  console.log({wallets})
+  // useWallets (solana) only has wallets when actively connected via adapter.
+  // After a refresh, fall back to the persisted address from Privy's user object.
+  const linkedSolanaWallet = user?.linkedAccounts?.find(
+    (a): a is Extract<typeof a, { type: 'wallet'; chainType: string }> =>
+      a.type === 'wallet' && 'chainType' in a && (a as any).chainType === 'solana'
+  );
+  const connectedAddress = wallets[0]?.address || (linkedSolanaWallet as any)?.address;
 
   // Track previous doc IDs that were already "done" for auto-play
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
@@ -594,6 +601,7 @@ export default function AgentsSocialPage() {
       avatar: m.image_url || null,
       tag: `$${m.symbol} • ${m.creator_split}% crt`,
       plays: 0,
+      tokenAddress: m.token_address || null,
     })),
   ];
 
@@ -667,8 +675,14 @@ export default function AgentsSocialPage() {
               {/* Add new voice */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
                   <motion.button
-                    onClick={authenticated ? () => setIsAddVoiceModalOpen(true) : login}
-                    // onClick={() => setIsAddVoiceModalOpen(true)}
+                    onClick={authenticated ? async () => {
+                      if (wallets.length === 0) {
+                        // After a page refresh, the Solana wallet adapter hasn't reconnected.
+                        // Prompt the user to reconnect before opening the modal.
+                        try { await connectWallet(); } catch { return; }
+                      }
+                      setIsAddVoiceModalOpen(true);
+                    } : login}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.97 }}
                     animate={{
@@ -736,6 +750,17 @@ export default function AgentsSocialPage() {
                       <Headphones className="w-5 h-5 text-red-400" />
                       {activeModel.name}
                       <span className="text-zinc-600 font-normal text-sm">says…</span>
+                      {activeModel.tokenAddress && (
+                        <a
+                          href={`https://pump.fun/coin/${activeModel.tokenAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[10px] font-mono font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
+                        >
+                          {activeModel.tokenAddress.slice(0, 4)}…{activeModel.tokenAddress.slice(-4)}
+                        </a>
+                      )}
                     </h2>
                     <p className="text-[11px] text-zinc-600">{cards.length} clips</p>
                   </div>

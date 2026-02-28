@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useWallets } from "@privy-io/react-auth";
-import { useSignAndSendTransaction } from "@privy-io/react-auth/solana";
+import { useWallets, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -27,7 +26,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
     e.preventDefault();
     if (creatorSplit < 0 || creatorSplit > 90) return;
     
-    // Find a wallet that is explicitly a Solana chain wallet
+    // Wallet should already be connected before modal opens (handled by AgentsSocialPage)
     const solanaWallet = wallets[0];
     
     if (!solanaWallet) {
@@ -43,14 +42,15 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
     setLoading(true);
     try {
       // 1. Setup Solana Provider & PumpSdk
-      const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+      const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
       const mint = Keypair.generate();
 
-      // 4. Create Token Metadata via Firebase
+      // 4. Create Token Metadata via Firebase (short paths to keep URL < 200 chars)
+      const shortMint = mint.publicKey.toBase58().slice(0, 8);
       console.log("Uploading image to Firebase Storage for metadata...");
-      const imageStorageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-${imageFile.name}`);
+      const imageStorageRef = ref(storage, `vm/${shortMint}-i`);
       await uploadBytes(imageStorageRef, imageFile, { contentType: imageFile.type });
       const finalImageUrl = await getDownloadURL(imageStorageRef);
 
@@ -68,24 +68,49 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       };
       
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
-      const metadataStorageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-metadata.json`);
+      const metadataStorageRef = ref(storage, `vm/${shortMint}-m`);
       await uploadBytes(metadataStorageRef, metadataBlob, { contentType: "application/json" });
       const metadataUrl = await getDownloadURL(metadataStorageRef);
+      console.log("Metadata URL length:", metadataUrl.length, metadataUrl);
 
-      // 5. Build & Send Create Transaction
+      // 5. Build & Send Create Transaction (using V2 instruction)
       console.log("Deploying token...", mint.publicKey.toBase58());
       
-      const createIx = await sdk.createInstruction({
+      const createIx = await sdk.createV2Instruction({
         mint: mint.publicKey,
         name: tokenName,
         symbol: symbol,
         uri: metadataUrl,
         creator: publicKey,
         user: publicKey,
+        mayhemMode: false,
       });
       
       const createTx = new Transaction().add(createIx);
 
+      // Sign and send the create transaction first
+      let latestBlockhash = await connection.getLatestBlockhash("confirmed");
+      createTx.recentBlockhash = latestBlockhash.blockhash;
+      createTx.feePayer = publicKey;
+      createTx.partialSign(mint);
+
+      // Simulate first to get detailed error logs
+      const simulation = await connection.simulateTransaction(createTx);
+      if (simulation.value.err) {
+        console.error("Simulation failed:", simulation.value.err);
+        console.error("Simulation logs:", simulation.value.logs);
+        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}\nLogs: ${simulation.value.logs?.join('\n')}`);
+      }
+      console.log("Simulation passed, requesting signature...");
+
+      const serializedCreateTx = createTx.serialize({ requireAllSignatures: false });
+      const { signature } = await signAndSendTransaction({
+        transaction: serializedCreateTx,
+        wallet: solanaWallet as any,
+      });
+      console.log("Token created! Signature:", signature);
+
+      // Now handle fee sharing in a separate transaction
       const splitWalletAddress = process.env.NEXT_PUBLIC_SPLIT_WALLET;
       if (splitWalletAddress && creatorSplit < 100) {
         try {
@@ -94,6 +119,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
           const splitBps = 10000 - creatorBps;
           
           if (splitBps > 0) {
+            const feeSharingTx = new Transaction();
             const createFeeSharingIx = await sdk.createFeeSharingConfig({
               creator: publicKey,
               mint: mint.publicKey,
@@ -108,25 +134,26 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
                 { address: splitWallet, shareBps: splitBps }
               ],
             });
-            createTx.add(createFeeSharingIx, updateFeeSharesIx);
+            feeSharingTx.add(createFeeSharingIx, updateFeeSharesIx);
+
+            latestBlockhash = await connection.getLatestBlockhash("confirmed");
+            feeSharingTx.recentBlockhash = latestBlockhash.blockhash;
+            feeSharingTx.feePayer = publicKey;
+
+            console.log("Requesting signature for fee sharing setup...");
+            const serializedFeeTx = feeSharingTx.serialize({ requireAllSignatures: false });
+            const { signature: feeSignature } = await signAndSendTransaction({
+              transaction: serializedFeeTx,
+              wallet: solanaWallet as any,
+            });
+            console.log("Fee sharing configured! Signature:", feeSignature);
           }
         } catch (e) {
-          console.error("Error adding split instructions", e);
-          return alert("Failied to deploy token, try again later")
+          console.error("Error setting up fee sharing", e);
+          // Token is already created, so just warn — don't block
+          alert("Token created but fee sharing setup failed. You can configure it later.");
         }
       }
-      
-      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-      createTx.recentBlockhash = latestBlockhash.blockhash;
-      createTx.feePayer = publicKey;
-      createTx.partialSign(mint);
-
-      console.log("Requesting signature...");
-      const { signature } = await signAndSendTransaction({
-        transaction: createTx as any,
-        wallet: solanaWallet as any,
-      });
-      console.log("Deployed! Signature:", signature);
 
 
       // 2. Call Gradio API First
@@ -134,7 +161,6 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       const result = await downloadAndProcessVoiceModel(modelUrl, modelName);
       console.log("Gradio API result:", (result as any).data);
 
-      // 3. Store doc with deployed: false
       const docId = await addTtsVoiceModel({
         model_url: modelUrl,
         model_name: modelName,
@@ -148,6 +174,9 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         token_address: mint.publicKey.toBase58(),
         image_url: finalImageUrl || undefined,
       });
+
+      // Open the pump.fun token page in a new tab
+      window.open(`https://pump.fun/coin/${mint.publicKey.toBase58()}`, "_blank");
 
       onClose();
       setModelUrl("");
