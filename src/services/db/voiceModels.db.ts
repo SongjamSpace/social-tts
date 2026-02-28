@@ -12,6 +12,40 @@ import {
 } from "firebase/firestore";
 import { db } from "@/services/firebase.service";
 
+export interface TtsVoiceModel {
+  id?: string;
+  model_url: string;
+  model_name: string;
+  token_name: string;
+  symbol: string;
+  creator_split: number;
+  eve_split: number;
+  creator_wallet?: string;
+  eve_wallet?: string;
+  created_at: Timestamp;
+}
+
+export async function addTtsVoiceModel(data: Omit<TtsVoiceModel, "created_at" | "id">) {
+  const ref = collection(db, "tts_voice_models");
+  // Use addDoc or create a new doc ref then setDoc
+  const newDocRef = doc(ref);
+  await setDoc(newDocRef, {
+    ...data,
+    created_at: Timestamp.now(),
+  });
+  return newDocRef.id;
+}
+
+export function subscribeToTtsVoiceModels(callback: (models: TtsVoiceModel[]) => void) {
+  const ref = collection(db, "tts_voice_models");
+  const q = query(ref, orderBy("created_at", "desc"));
+  return onSnapshot(q, (snap) => {
+    const models: TtsVoiceModel[] = [];
+    snap.forEach((d) => models.push({ id: d.id, ...d.data() } as TtsVoiceModel));
+    callback(models);
+  });
+}
+
 export interface VoiceModel {
   id: string;
   name: string;

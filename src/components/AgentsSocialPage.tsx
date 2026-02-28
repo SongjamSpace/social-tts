@@ -4,7 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import {
-  seedDefaultVoiceModels,
+  subscribeToTtsVoiceModels,
+  addTtsVoiceModel,
+  TtsVoiceModel,
 } from "@/services/db/voiceModels.db";
 import {
   subscribeToTtsResults,
@@ -15,11 +17,13 @@ import {
   uploadTtsAudio,
   updateTtsResultAudioUrl,
 } from "@/services/db/ttsResults.db";
-import { Mic, Play, Heart, Headphones, Zap, Send } from "lucide-react";
+import { Mic, Play, Heart, Headphones, Zap, Send, X } from "lucide-react";
 import { generateTts, TtsStatus } from "@/lib/rvcHf";
 import { auth } from "@/services/firebase.service";
 import { TwitterAuthProvider, signInWithPopup } from "firebase/auth";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { PumpSdk } from "@pump-fun/pump-sdk";
+import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
 
 // ─── Card type derived from Firestore ─────────────────────────────────────────
 type CardSize = "xs" | "sm" | "md" | "lg" | "xl";
@@ -114,11 +118,19 @@ function GridBackground() {
 }
 
 // ─── Voice model sidebar card ──────────────────────────────────────────────────
-const STATIC_MODELS = [
+export interface AppModel {
+  slug: string;
+  name: string;
+  avatar?: string | null;
+  tag?: string;
+  plays?: number;
+}
+
+const STATIC_MODELS: AppModel[] = [
   { slug: "mr-krabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "spongebob • character", plays: 42000 },
 ];
 
-function ModelSidebarCard({ model, isSelected, onClick }: { model: typeof STATIC_MODELS[0]; isSelected: boolean; onClick: () => void }) {
+function ModelSidebarCard({ model, isSelected, onClick }: { model: AppModel; isSelected: boolean; onClick: () => void }) {
   return (
     <motion.button
       onClick={onClick}
@@ -154,6 +166,154 @@ function ModelSidebarCard({ model, isSelected, onClick }: { model: typeof STATIC
         )}
       </div>
     </motion.button>
+  );
+}
+
+function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { wallets } = useWallets();
+  const [modelUrl, setModelUrl] = useState("");
+  const [modelName, setModelName] = useState("");
+  const [tokenName, setTokenName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [creatorSplit, setCreatorSplit] = useState<number>(50);
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (creatorSplit < 0 || creatorSplit > 90) return;
+    
+    const solanaWallet = wallets.find((w: any) => w.chainType === "solana" || w.walletClientType === "privy") as any;
+    if (!solanaWallet) {
+      alert("Please connect a Solana wallet first!");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Setup Solana Provider & PumpSdk
+      const provider = await solanaWallet.getSolanaProvider();
+      const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+      const publicKey = new PublicKey(solanaWallet.address);
+      const sdk = new PumpSdk();
+
+      // 2. Create Token Metadata (needs a dummy image for now)
+      const emptyPng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 226, 38, 5, 155, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
+      const imageBlob = new Blob([emptyPng], { type: "image/png" });
+      
+      console.log("Creating token metadata...");
+      const formData = new FormData();
+      formData.append("file", imageBlob, 'image.png');
+      formData.append("name", tokenName);
+      formData.append("symbol", symbol);
+      formData.append("description", `Voice model for ${modelName}`);
+      formData.append("showName", "true");
+
+      const request = await fetch("https://pump.fun/api/ipfs", {
+        method: "POST",
+        body: formData,
+      });
+      const metadataResult = await request.json();
+
+      // 3. Build & Send Create Transaction
+      const mint = Keypair.generate();
+      console.log("Deploying token...", mint.publicKey.toBase58());
+      
+      const createIx = await sdk.createInstruction({
+        mint: mint.publicKey,
+        name: tokenName,
+        symbol: symbol,
+        uri: metadataResult.metadataUri || metadataResult.uri || "",
+        creator: publicKey,
+        user: publicKey,
+      });
+      
+      const createTx = new Transaction().add(createIx);
+      
+      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+      createTx.recentBlockhash = latestBlockhash.blockhash;
+      createTx.feePayer = publicKey;
+      createTx.partialSign(mint);
+
+      console.log("Requesting signature...");
+      const signature = await provider.sendTransaction(createTx, connection);
+      console.log("Deployed! Signature:", signature);
+
+      // 4. Save to DB
+      await addTtsVoiceModel({
+        model_url: modelUrl,
+        model_name: modelName,
+        token_name: tokenName,
+        symbol,
+        creator_split: Number(creatorSplit),
+        eve_split: 100 - Number(creatorSplit),
+        creator_wallet: solanaWallet.address,
+        eve_wallet: "EVE_SHARE_WALLET_ADDRESS_PLACEHOLDER", // To be replaced
+      });
+      onClose();
+      setModelUrl("");
+      setModelName("");
+      setTokenName("");
+      setSymbol("");
+      setCreatorSplit(50);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-zinc-900 border border-white/10 p-6 rounded-3xl w-full max-w-md shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-5 right-5 text-zinc-500 hover:text-white transition-colors">
+          <X className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl text-white font-bold mb-6">Add new voice</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Downloadable Model URL</label>
+            <input required type="url" value={modelUrl} onChange={e=>setModelUrl(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="https://..." />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Model Name</label>
+            <input required type="text" value={modelName} onChange={e=>setModelName(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. My Custom Voice" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Token Name</label>
+              <input required type="text" value={tokenName} onChange={e=>setTokenName(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. Krabs Coin" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Symbol</label>
+              <input required type="text" value={symbol} onChange={e=>setSymbol(e.target.value.toUpperCase())} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. KRABS" />
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between items-end mb-2">
+              <label className="block text-xs font-medium text-zinc-400">Creator Split Share</label>
+              <span className="text-xs font-bold text-white bg-white/10 px-2 py-0.5 rounded">{creatorSplit}%</span>
+            </div>
+            <input 
+              required 
+              type="range" 
+              min="0" 
+              max="90" 
+              value={creatorSplit} 
+              onChange={e=>setCreatorSplit(Number(e.target.value))} 
+              className="w-full accent-red-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer" 
+            />
+            <div className="flex justify-between mt-2">
+              <p className="text-[10px] text-zinc-500">Max: 90%</p>
+              <p className="text-[10px] text-zinc-500">EVE Share: <span className="text-zinc-300 font-semibold">{100 - creatorSplit}%</span></p>
+            </div>
+          </div>
+          <button disabled={loading} type="submit" className="w-full mt-2 py-3 bg-red-500/80 hover:bg-red-500 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50">
+            {loading ? "Uploading..." : "Add Voice"}
+          </button>
+        </form>
+      </motion.div>
+    </div>
   );
 }
 
@@ -339,30 +499,6 @@ function TtsCard({
   );
 }
 
-// ─── Privy Connect Button ────────────────────────────────────────────────────────
-function PrivyConnectButton() {
-  const { login, authenticated, user, logout } = usePrivy();
-
-  if (authenticated && user) {
-    const solanaAccount = (user.linkedAccounts || []).find(
-      (a: any) => a.type === "wallet" && a.chainType === "solana"
-    ) as any;
-    const address = solanaAccount?.address || user.wallet?.address;
-    const shortAddress = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "Connected";
-    return (
-      <button onClick={logout} className="text-[10px] font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors" title="Click to Logout">
-        {shortAddress}
-      </button>
-    );
-  }
-
-  return (
-    <button onClick={login} className="text-[10px] font-bold px-2 py-1 rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors border border-purple-500/20">
-      Connect Wallet
-    </button>
-  );
-}
-
 // ─── TTS Generate input ────────────────────────────────────────────────────────
 function GenerateInput({ slug }: { slug: string }) {
   const [text, setText] = useState("");
@@ -520,6 +656,10 @@ export default function AgentsSocialPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const seededRef = useRef(false);
 
+  const [ttsVoiceModels, setTtsVoiceModels] = useState<TtsVoiceModel[]>([]);
+  const [isAddVoiceModalOpen, setIsAddVoiceModalOpen] = useState(false);
+  const { authenticated, login } = usePrivy();
+
   // Track previous doc IDs that were already "done" for auto-play
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
   // Whether this is the very first snapshot (skip auto-play on initial load)
@@ -585,12 +725,31 @@ export default function AgentsSocialPage() {
   const col1 = cards.filter((_, i) => i % 3 === 1);
   const col2 = cards.filter((_, i) => i % 3 === 2);
 
-  const activeModel = STATIC_MODELS.find((m) => m.slug === activeSlug)!;
+  // Subscribe to live Firestore tts_voice_models
+  useEffect(() => {
+    return subscribeToTtsVoiceModels((models) => {
+      setTtsVoiceModels(models);
+    });
+  }, []);
+
+  const allModels: AppModel[] = [
+    ...STATIC_MODELS,
+    ...ttsVoiceModels.map((m) => ({
+      slug: m.id!,
+      name: m.model_name,
+      avatar: null,
+      tag: `$${m.symbol} • ${m.creator_split}% crt`,
+      plays: 0,
+    })),
+  ];
+
+  const activeModel = allModels.find((m) => m.slug === activeSlug) || allModels[0];
 
   return (
     <div className="relative min-h-screen bg-[#060608] text-white overflow-x-hidden">
       <GridBackground />
       <CursorOrb />
+      <AddVoiceModal isOpen={isAddVoiceModalOpen} onClose={() => setIsAddVoiceModalOpen(false)} />
 
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* ── Hero ──────────────────────────────────────────────────────────────── */}
@@ -643,7 +802,7 @@ export default function AgentsSocialPage() {
                   <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Voice Models</h2>
                 </div>
                 <div className="space-y-2">
-                  {STATIC_MODELS.map((m, i) => (
+                  {allModels.map((m, i) => (
                     <motion.div key={m.slug} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.07 }}>
                       <ModelSidebarCard model={m} isSelected={activeSlug === m.slug} onClick={() => setActiveSlug(m.slug)} />
                     </motion.div>
@@ -653,14 +812,15 @@ export default function AgentsSocialPage() {
 
               {/* Add new voice */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-300 hover:border-white/20 hover:bg-white/[0.03] transition-all"
-                >
-                  <span className="text-base leading-none">+</span>
-                  Add new voice
-                </motion.button>
+                  <motion.button
+                    onClick={authenticated ? () => setIsAddVoiceModalOpen(true) : login}
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-300 hover:border-white/20 hover:bg-white/[0.03] transition-all"
+                  >
+                    <span className="text-base leading-none">+</span>
+                    Create Voice Token
+                  </motion.button>
               </motion.div>
 
               {/* Generate */}
@@ -670,7 +830,6 @@ export default function AgentsSocialPage() {
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
                     <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Generate</h2>
                   </div>
-                  <PrivyConnectButton />
                 </div>
                 <GenerateInput slug={activeSlug} />
               </motion.div>

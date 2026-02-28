@@ -11,6 +11,7 @@
     "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
     "@daily-co/daily-js": "^0.85.0",
     "@daily-co/daily-react": "^0.24.0",
     "@elevenlabs/react": "^0.11.0",
@@ -26,6 +27,7 @@
     "@supabase/supabase-js": "^2.55.0",
     "@tanstack/react-query": "^5.81.5",
     "axios": "^1.12.2",
+    "bs58": "^6.0.0",
     "clanker-sdk": "^4.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -50,11 +52,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@solana-program/memo": "^0.8.0",
-    "@solana-program/system": "^0.8.1",
-    "@solana-program/token": "^0.6.0",
-    "@solana/kit": "^3.0.3",
-    "@solana/web3.js": "2.0.0-preview.4",
+    "@solana/web3.js": "1.95.4",
     "@tailwindcss/postcss": "^4",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
