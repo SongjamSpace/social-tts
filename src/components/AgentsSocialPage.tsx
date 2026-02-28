@@ -766,7 +766,7 @@ export default function AgentsSocialPage() {
                 initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }}
               >
                 <motion.span className="w-1.5 h-1.5 rounded-full bg-red-400" animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
-                TTS Social
+                Eve Army
               </motion.div>
 
               <h1 className="text-5xl sm:text-7xl font-black tracking-tight mb-4 leading-none" style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}>
