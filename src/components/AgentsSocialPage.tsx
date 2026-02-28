@@ -664,8 +664,8 @@ export default function AgentsSocialPage() {
               {/* Add new voice */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
                   <motion.button
-                    // onClick={authenticated ? () => setIsAddVoiceModalOpen(true) : login}
-                    onClick={() => setIsAddVoiceModalOpen(true)}
+                    onClick={authenticated ? () => setIsAddVoiceModalOpen(true) : login}
+                    // onClick={() => setIsAddVoiceModalOpen(true)}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.97 }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-300 hover:border-white/20 hover:bg-white/[0.03] transition-all"
