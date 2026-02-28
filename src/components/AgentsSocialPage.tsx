@@ -20,7 +20,7 @@ import { Mic, Play, Heart, Headphones, Zap, Send } from "lucide-react";
 import { generateTts, TtsStatus } from "@/lib/rvcHf";
 import { auth } from "@/services/firebase.service";
 import { TwitterAuthProvider, signInWithPopup } from "firebase/auth";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import AddVoiceModal from "./AddVoiceModal";
 
 // ─── Card type derived from Firestore ─────────────────────────────────────────
@@ -509,7 +509,9 @@ export default function AgentsSocialPage() {
 
   const [ttsVoiceModels, setTtsVoiceModels] = useState<TtsVoiceModel[]>([]);
   const [isAddVoiceModalOpen, setIsAddVoiceModalOpen] = useState(false);
-  const { authenticated, login } = usePrivy();
+  const { authenticated, login, logout } = usePrivy();
+  const { wallets } = useWallets();
+  const connectedAddress = wallets[0]?.address;
 
   // Track previous doc IDs that were already "done" for auto-play
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
@@ -668,11 +670,38 @@ export default function AgentsSocialPage() {
                     // onClick={() => setIsAddVoiceModalOpen(true)}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.97 }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-300 hover:border-white/20 hover:bg-white/[0.03] transition-all"
+                    animate={{
+                      boxShadow: [
+                        "0px 0px 0px rgba(239,68,68,0)",
+                        "0px 0px 15px rgba(239,68,68,0.25)",
+                        "0px 0px 0px rgba(239,68,68,0)",
+                      ],
+                      borderColor: [
+                        "rgba(239,68,68,0.3)",
+                        "rgba(239,68,68,0.7)",
+                        "rgba(239,68,68,0.3)"
+                      ]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    className="relative overflow-hidden w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors group"
                   >
-                    <span className="text-base leading-none">+</span>
-                    Create Voice Token
+                    <motion.div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.2), transparent)" }}
+                      animate={{ x: ["-100%", "100%"] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                    />
+                    <span className="text-base leading-none relative z-10">+</span>
+                    <span className="relative z-10">Create Voice Token</span>
                   </motion.button>
+                  {authenticated && (
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500 px-1">
+                      {connectedAddress && <span className="font-mono">{connectedAddress.slice(0, 4)}...{connectedAddress.slice(-4)}</span>}
+                      <button onClick={logout} className="hover:text-red-400 transition-colors">
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
               </motion.div>
 
               {/* Generate */}
