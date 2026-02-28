@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useWallets as useSolanaWallets, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
+import { useWallets } from "@privy-io/react-auth";
+import { useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -10,7 +11,7 @@ import { addTtsVoiceModel, updateTtsVoiceModel } from "@/services/db/voiceModels
 import { downloadAndProcessVoiceModel } from "@/lib/rvcHf";
 
 export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { wallets } = useSolanaWallets();
+  const { wallets } = useWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
   const [modelUrl, setModelUrl] = useState("");
   const [modelName, setModelName] = useState("");
@@ -127,6 +128,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
           }
         } catch (e) {
           console.error("Error adding split instructions", e);
+          return alert("Failied to deploy token, try again later")
         }
       }
       
@@ -138,7 +140,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       console.log("Requesting signature...");
       const { signature } = await signAndSendTransaction({
         transaction: createTx as any,
-        wallet: solanaWallet,
+        wallet: solanaWallet as any,
       });
       console.log("Deployed! Signature:", signature);
 
