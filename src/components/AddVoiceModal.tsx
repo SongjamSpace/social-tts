@@ -61,35 +61,40 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
+      const mint = Keypair.generate();
 
-      // 4. Create Token Metadata
-      console.log("Creating token metadata...");
-      const formData = new FormData();
-      formData.append("file", imageFile, imageFile.name);
-      formData.append("name", tokenName);
-      formData.append("symbol", symbol);
-      formData.append("description", `Voice model for ${modelName}`);
-      formData.append("showName", "true");
+      // 4. Create Token Metadata via Firebase
+      console.log("Uploading image to Firebase Storage for metadata...");
+      const imageStorageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-${imageFile.name}`);
+      await uploadBytes(imageStorageRef, imageFile, { contentType: imageFile.type });
+      const finalImageUrl = await getDownloadURL(imageStorageRef);
 
-      const request = await fetch("/api/pumpfun/ipfs", {
-        method: "POST",
-        body: formData,
-      });
-      const metadataResult = await request.json();
+      console.log("Uploading metadata to Firebase Storage...");
+      const metadata = {
+        name: tokenName,
+        symbol: symbol,
+        description: `Voice model for ${modelName}`,
+        image: finalImageUrl,
+        showName: true,
+        createdOn: "https://pump.fun",
+        twitter: "",
+        telegram: "",
+        website: "",
+      };
       
-      if (!request.ok) {
-        throw new Error(metadataResult.error || "Failed to upload token metadata");
-      }
+      const metadataBlob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
+      const metadataStorageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-metadata.json`);
+      await uploadBytes(metadataStorageRef, metadataBlob, { contentType: "application/json" });
+      const metadataUrl = await getDownloadURL(metadataStorageRef);
 
       // 5. Build & Send Create Transaction
-      const mint = Keypair.generate();
       console.log("Deploying token...", mint.publicKey.toBase58());
       
       const createIx = await sdk.createInstruction({
         mint: mint.publicKey,
         name: tokenName,
         symbol: symbol,
-        uri: metadataResult.metadataUri || metadataResult.uri || "",
+        uri: metadataUrl,
         creator: publicKey,
         user: publicKey,
       });
@@ -137,21 +142,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       });
       console.log("Deployed! Signature:", signature);
 
-      // 6. Upload Image to Storage
-      let finalImageUrl = "";
-      if (imageFile) {
-        try {
-          console.log("Uploading image to Firebase Storage...");
-          const storageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-${imageFile.name}`);
-          await uploadBytes(storageRef, imageFile, { contentType: imageFile.type });
-          finalImageUrl = await getDownloadURL(storageRef);
-          console.log("Image uploaded to Storage:", finalImageUrl);
-        } catch (uploadErr) {
-          console.error("Failed to upload image to Firebase Storage:", uploadErr);
-        }
-      }
-
-      // 7. Update DB to deployed: true and save image url
+      // 6. Update DB to deployed: true and save image url
       await updateTtsVoiceModel(docId, {
         deployed: true,
         image_url: finalImageUrl || undefined,
