@@ -839,7 +839,7 @@ export default function AgentsSocialPage() {
               </h1>
 
               <p className="text-zinc-500 text-sm sm:text-base max-w-md mx-auto leading-relaxed">
-                Social media for TTS &amp; uncensored voice models.{" "}
+                Permissionless voice agents that pay the voice owner.{" "}
                 <span className="text-zinc-400">Discover, play, and generate</span> voices that say the unsayable.
               </p>
             </motion.div>
