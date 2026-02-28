@@ -353,7 +353,7 @@ function TtsCard({
 }
 
 // ─── TTS Generate input ────────────────────────────────────────────────────────
-function GenerateInput({ slug }: { slug: string }) {
+function GenerateInput({ model }: { model: AppModel }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<TtsStatus | null>(null);
@@ -366,7 +366,7 @@ function GenerateInput({ slug }: { slug: string }) {
 
     const capturedText = text.trim();
     setText(""); // Clear input immediately after capture
-    const voiceModel = "mrkrabs";
+    const voiceModel = model.slug === "mr-krabs" ? "mrkrabs" : model.name;
     const ttsVoice = "en-US-ChristopherNeural";
 
     // Ensure the user is signed in with Twitter before generating
@@ -411,8 +411,8 @@ function GenerateInput({ slug }: { slug: string }) {
                 const docId = await createTtsResultDoc({
                   text: capturedText,
                   voiceModel,
-                  voiceModelSlug: "mr-krabs",
-                  voiceModelName: "Mr. Krabs",
+                  voiceModelSlug: model.slug,
+                  voiceModelName: model.name,
                   ttsVoice,
                   createdBy,
                 });
@@ -727,7 +727,7 @@ export default function AgentsSocialPage() {
                     <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Generate</h2>
                   </div>
                 </div>
-                <GenerateInput slug={activeSlug} />
+                <GenerateInput model={activeModel} />
               </motion.div>
             </motion.aside>
 
@@ -758,7 +758,7 @@ export default function AgentsSocialPage() {
                           onClick={(e) => e.stopPropagation()}
                           className="text-[10px] font-mono font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
                         >
-                          {activeModel.tokenAddress.slice(0, 4)}…{activeModel.tokenAddress.slice(-4)}
+                          View on pump.fun
                         </a>
                       )}
                     </h2>
