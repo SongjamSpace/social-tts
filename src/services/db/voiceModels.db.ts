@@ -25,6 +25,7 @@ export interface TtsVoiceModel {
   split_wallet?: string;
   image_url?: string;
   deployed?: boolean;
+  token_address?: string;
   created_at: Timestamp;
 }
 

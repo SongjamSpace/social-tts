@@ -40,25 +40,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
 
     setLoading(true);
     try {
-      // 1. Call Gradio API First
-      console.log("Calling Gradio API...");
-      const result = await downloadAndProcessVoiceModel(modelUrl, modelName);
-      console.log("Gradio API result:", (result as any).data);
-
-      // 2. Store doc with deployed: false
-      const docId = await addTtsVoiceModel({
-        model_url: modelUrl,
-        model_name: modelName,
-        token_name: tokenName,
-        symbol,
-        creator_split: Number(creatorSplit),
-        split: 100 - Number(creatorSplit),
-        creator_wallet: solanaWallet.address,
-        split_wallet: process.env.NEXT_PUBLIC_SPLIT_WALLET || "",
-        deployed: false,
-      });
-
-      // 3. Setup Solana Provider & PumpSdk
+      // 1. Setup Solana Provider & PumpSdk
       const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
@@ -144,9 +126,24 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       });
       console.log("Deployed! Signature:", signature);
 
-      // 6. Update DB to deployed: true and save image url
-      await updateTtsVoiceModel(docId, {
+
+      // 2. Call Gradio API First
+      console.log("Calling Gradio API...");
+      const result = await downloadAndProcessVoiceModel(modelUrl, modelName);
+      console.log("Gradio API result:", (result as any).data);
+
+      // 3. Store doc with deployed: false
+      const docId = await addTtsVoiceModel({
+        model_url: modelUrl,
+        model_name: modelName,
+        token_name: tokenName,
+        symbol,
+        creator_split: Number(creatorSplit),
+        split: 100 - Number(creatorSplit),
+        creator_wallet: solanaWallet.address,
+        split_wallet: process.env.NEXT_PUBLIC_SPLIT_WALLET || "",
         deployed: true,
+        token_address: mint.publicKey.toBase58(),
         image_url: finalImageUrl || undefined,
       });
 
