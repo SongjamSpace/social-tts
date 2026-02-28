@@ -19,9 +19,10 @@ export interface TtsVoiceModel {
   token_name: string;
   symbol: string;
   creator_split: number;
-  eve_split: number;
+  split: number;
   creator_wallet?: string;
-  eve_wallet?: string;
+  split_wallet?: string;
+  image_url?: string;
   created_at: Timestamp;
 }
 

@@ -19,9 +19,11 @@ import {
 } from "@/services/db/ttsResults.db";
 import { Mic, Play, Heart, Headphones, Zap, Send, X } from "lucide-react";
 import { generateTts, TtsStatus } from "@/lib/rvcHf";
-import { auth } from "@/services/firebase.service";
+import { auth, storage } from "@/services/firebase.service";
 import { TwitterAuthProvider, signInWithPopup } from "firebase/auth";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { usePrivy } from "@privy-io/react-auth";
+import { useWallets as useSolanaWallets, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
 
@@ -170,11 +172,13 @@ function ModelSidebarCard({ model, isSelected, onClick }: { model: AppModel; isS
 }
 
 function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { wallets } = useWallets();
+  const { wallets } = useSolanaWallets();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
   const [modelUrl, setModelUrl] = useState("");
   const [modelName, setModelName] = useState("");
   const [tokenName, setTokenName] = useState("");
   const [symbol, setSymbol] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [creatorSplit, setCreatorSplit] = useState<number>(50);
   const [loading, setLoading] = useState(false);
 
@@ -184,27 +188,31 @@ function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     e.preventDefault();
     if (creatorSplit < 0 || creatorSplit > 90) return;
     
-    const solanaWallet = wallets.find((w: any) => w.chainType === "solana" || w.walletClientType === "privy") as any;
+    const solanaWallet = wallets[0];
     if (!solanaWallet) {
-      alert("Please connect a Solana wallet first!");
+      alert("Please connect a wallet first!");
       return;
     }
 
     setLoading(true);
     try {
       // 1. Setup Solana Provider & PumpSdk
-      const provider = await solanaWallet.getSolanaProvider();
       const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
 
-      // 2. Create Token Metadata (needs a dummy image for now)
-      const emptyPng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 226, 38, 5, 155, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
-      const imageBlob = new Blob([emptyPng], { type: "image/png" });
+      // 2. Create Token Metadata
+      let imageBlob: Blob;
+      if (imageFile) {
+        imageBlob = imageFile;
+      } else {
+        const emptyPng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 226, 38, 5, 155, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
+        imageBlob = new Blob([emptyPng], { type: "image/png" });
+      }
       
       console.log("Creating token metadata...");
       const formData = new FormData();
-      formData.append("file", imageBlob, 'image.png');
+      formData.append("file", imageBlob, imageFile ? imageFile.name : 'image.png');
       formData.append("name", tokenName);
       formData.append("symbol", symbol);
       formData.append("description", `Voice model for ${modelName}`);
@@ -230,6 +238,35 @@ function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
       });
       
       const createTx = new Transaction().add(createIx);
+
+      const splitWalletAddress = process.env.NEXT_PUBLIC_SPLIT_WALLET;
+      if (splitWalletAddress && creatorSplit < 100) {
+        try {
+          const splitWallet = new PublicKey(splitWalletAddress);
+          const creatorBps = Math.floor(creatorSplit * 100);
+          const splitBps = 10000 - creatorBps;
+          
+          if (splitBps > 0) {
+            const createFeeSharingIx = await sdk.createFeeSharingConfig({
+              creator: publicKey,
+              mint: mint.publicKey,
+              pool: null,
+            });
+            const updateFeeSharesIx = await sdk.updateFeeShares({
+              authority: publicKey,
+              mint: mint.publicKey,
+              currentShareholders: [publicKey],
+              newShareholders: [
+                { address: publicKey, shareBps: creatorBps },
+                { address: splitWallet, shareBps: splitBps }
+              ],
+            });
+            createTx.add(createFeeSharingIx, updateFeeSharesIx);
+          }
+        } catch (e) {
+          console.error("Error adding split instructions", e);
+        }
+      }
       
       const latestBlockhash = await connection.getLatestBlockhash("confirmed");
       createTx.recentBlockhash = latestBlockhash.blockhash;
@@ -237,25 +274,44 @@ function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
       createTx.partialSign(mint);
 
       console.log("Requesting signature...");
-      const signature = await provider.sendTransaction(createTx, connection);
+      const { signature } = await signAndSendTransaction({
+        transaction: createTx as any,
+        wallet: solanaWallet,
+      });
       console.log("Deployed! Signature:", signature);
 
-      // 4. Save to DB
+      // 4. Upload Image to Storage
+      let finalImageUrl = "";
+      if (imageFile) {
+        try {
+          console.log("Uploading image to Firebase Storage...");
+          const storageRef = ref(storage, `voice-models/${mint.publicKey.toBase58()}-${imageFile.name}`);
+          await uploadBytes(storageRef, imageFile, { contentType: imageFile.type });
+          finalImageUrl = await getDownloadURL(storageRef);
+          console.log("Image uploaded to Storage:", finalImageUrl);
+        } catch (uploadErr) {
+          console.error("Failed to upload image to Firebase Storage:", uploadErr);
+        }
+      }
+
+      // 5. Save to DB
       await addTtsVoiceModel({
         model_url: modelUrl,
         model_name: modelName,
         token_name: tokenName,
         symbol,
         creator_split: Number(creatorSplit),
-        eve_split: 100 - Number(creatorSplit),
+        split: 100 - Number(creatorSplit),
         creator_wallet: solanaWallet.address,
-        eve_wallet: "EVE_SHARE_WALLET_ADDRESS_PLACEHOLDER", // To be replaced
+        split_wallet: process.env.NEXT_PUBLIC_SPLIT_WALLET || "EVE_SHARE_WALLET_ADDRESS_PLACEHOLDER", // To be replaced
+        image_url: finalImageUrl || undefined,
       });
       onClose();
       setModelUrl("");
       setModelName("");
       setTokenName("");
       setSymbol("");
+      setImageFile(null);
       setCreatorSplit(50);
     } catch (err) {
       console.error(err);
@@ -288,6 +344,10 @@ function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
               <label className="block text-xs font-medium text-zinc-400 mb-1.5">Symbol</label>
               <input required type="text" value={symbol} onChange={e=>setSymbol(e.target.value.toUpperCase())} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. KRABS" />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Token Image (Optional)</label>
+            <input type="file" accept="image/*" onChange={e=>setImageFile(e.target.files?.[0] || null)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 focus:outline-none focus:border-red-500/50" />
           </div>
           <div>
             <div className="flex justify-between items-end mb-2">
@@ -737,7 +797,7 @@ export default function AgentsSocialPage() {
     ...ttsVoiceModels.map((m) => ({
       slug: m.id!,
       name: m.model_name,
-      avatar: null,
+      avatar: m.image_url || null,
       tag: `$${m.symbol} • ${m.creator_split}% crt`,
       plays: 0,
     })),
