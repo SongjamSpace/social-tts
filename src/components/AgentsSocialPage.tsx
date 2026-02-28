@@ -512,6 +512,7 @@ export default function AgentsSocialPage() {
   const { authenticated, login, logout } = usePrivy();
   const { wallets } = useWallets();
   const connectedAddress = wallets[0]?.address;
+  console.log({wallets})
 
   // Track previous doc IDs that were already "done" for auto-play
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
