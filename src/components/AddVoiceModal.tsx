@@ -28,7 +28,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
     if (creatorSplit < 0 || creatorSplit > 90) return;
     
     // Find a wallet that is explicitly a Solana chain wallet
-    const solanaWallet = wallets.find((w: any) => w.chainType === 'solana' || w.walletClientType === 'privy' || w.walletClientType === 'phantom' || w.walletClientType === 'solflare');
+    const solanaWallet = wallets[0];
     
     if (!solanaWallet) {
       alert("Please connect a valid Solana wallet first!");
