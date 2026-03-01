@@ -640,7 +640,7 @@ export default function AgentsSocialPage() {
               </h1>
 
               <p className="text-zinc-500 text-sm sm:text-base max-w-md mx-auto leading-relaxed">
-                Social media for TTS &amp; uncensored voice models.{" "}
+              Permissionless voice agents that pay the voice owner.{" "}
                 <span className="text-zinc-400">Discover, play, and generate</span> voices that say the unsayable.
               </p>
             </motion.div>
@@ -706,7 +706,7 @@ export default function AgentsSocialPage() {
                       transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
                     />
                     <span className="text-base leading-none relative z-10">+</span>
-                    <span className="relative z-10">Create Voice Token</span>
+                    <span className="relative z-10">Create Voice Agent</span>
                   </motion.button>
                   {authenticated && (
                     <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500 px-1">

@@ -26,6 +26,7 @@ export interface TtsVoiceModel {
   image_url?: string;
   deployed?: boolean;
   token_address?: string;
+  voice_owner_wallet?: string;
   created_at: Timestamp;
 }
 

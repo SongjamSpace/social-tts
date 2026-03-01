@@ -5,7 +5,7 @@ import { ToastProvider } from "@/contexts/ToastContext";
 export const metadata: Metadata = {
   title: "EVE – voices that say the unsayable",
   description:
-    "Social media for TTS & uncensored voice models. Discover, play, and generate voices that say the unsayable.",
+    "Permissionless voice agents that pay the voice owner. Discover, play, and generate voices that say the unsayable.",
   manifest: "/manifest.json",
   icons: {
     icon: [
