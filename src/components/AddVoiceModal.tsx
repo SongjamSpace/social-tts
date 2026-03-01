@@ -47,13 +47,6 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       const sdk = new PumpSdk();
       const mint = Keypair.generate();
 
-      // Check balance before proceeding
-      const balance = await connection.getBalance(publicKey);
-      const minRequiredBalance = 0.025 * 1e9; // ~0.025 SOL required for pump.fun creation
-      if (balance < minRequiredBalance) {
-        throw new Error(`Insufficient funds. You need at least 0.025 SOL to deploy a token. Your current balance: ${(balance / 1e9).toFixed(4)} SOL.`);
-      }
-
       // 4. Create Token Metadata via Firebase (short paths to keep URL < 200 chars)
       const shortMint = mint.publicKey.toBase58().slice(0, 8);
       console.log("Uploading image to Firebase Storage for metadata...");
@@ -101,6 +94,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       createTx.feePayer = publicKey;
       createTx.partialSign(mint);
 
+      /* 
       // Simulate first to get detailed error logs
       const simulation = await connection.simulateTransaction(createTx);
       if (simulation.value.err) {
@@ -115,6 +109,7 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}\nLogs: ${simulation.value.logs?.join('\n')}`);
       }
       console.log("Simulation passed, requesting signature...");
+      */
 
       const serializedCreateTx = createTx.serialize({ requireAllSignatures: false });
       const { signature } = await signAndSendTransaction({
