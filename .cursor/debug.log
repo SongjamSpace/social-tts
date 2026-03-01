@@ -1,0 +1,4 @@
+{"location":"AddVoiceModal.tsx:wallet-generate","message":"Wallet generation API result","data":{"ok":false,"status":500,"publicKey":null,"body":"{\"error\":\"WALLET_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)\"}"},"timestamp":1772375212064,"hypothesisId":"H1"}
+{"location":"AddVoiceModal.tsx:fee-sharing-branch","message":"Fee sharing branch","data":{"ownerWalletPubkey":null,"creatorSplit":75,"willEnterFeeSharing":false},"timestamp":1772375212065,"hypothesisId":"H2"}
+{"location":"AddVoiceModal.tsx:wallet-generate","message":"Wallet generation API result","data":{"ok":false,"status":500,"publicKey":null,"body":"{\"error\":\"WALLET_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)\"}"},"timestamp":1772375409159,"hypothesisId":"H1"}
+{"location":"AddVoiceModal.tsx:fee-sharing-branch","message":"Fee sharing branch","data":{"ownerWalletPubkey":null,"creatorSplit":75,"willEnterFeeSharing":false},"timestamp":1772375409159,"hypothesisId":"H2"}

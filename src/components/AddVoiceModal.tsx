@@ -425,22 +425,24 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         });
         const walletOk = walletRes.ok;
         const walletStatus = walletRes.status;
+        let walletErrorBody = "";
         if (walletOk) {
           const data = await walletRes.json();
           ownerWalletPubkey = data.publicKey ?? null;
           console.log("Voice owner wallet generated:", ownerWalletPubkey);
+        } else {
+          walletErrorBody = await walletRes.text();
         }
         // #region agent log
         const walletPayload: Record<string, unknown> = { ok: walletOk, status: walletStatus, publicKey: ownerWalletPubkey };
-        if (!walletOk) {
-          try {
-            walletPayload.body = await walletRes.text();
-          } catch (_) {}
-        }
+        if (!walletOk) walletPayload.body = walletErrorBody;
         const h1Payload = { location: "AddVoiceModal.tsx:wallet-generate", message: "Wallet generation API result", data: walletPayload, timestamp: Date.now(), hypothesisId: "H1" };
         console.log("[fee-share-debug]", JSON.stringify(h1Payload));
         fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h1Payload) }).catch(() => {});
         // #endregion
+        if (!walletOk && walletErrorBody.includes("WALLET_ENCRYPTION_KEY") && creatorSplit < 100) {
+          alert("Creator reward split is disabled: the server is missing WALLET_ENCRYPTION_KEY. Add a 64-character hex value to your production environment variables (e.g. in Vercel) to enable voice owner wallets and reward splits.");
+        }
       } catch (walletErr) {
         // #region agent log
         const h1CatchPayload = { location: "AddVoiceModal.tsx:wallet-generate-catch", message: "Wallet generation threw", data: { err: String(walletErr) }, timestamp: Date.now(), hypothesisId: "H1" };
