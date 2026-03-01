@@ -510,7 +510,7 @@ export default function AgentsSocialPage() {
 
   const [ttsVoiceModels, setTtsVoiceModels] = useState<TtsVoiceModel[]>([]);
   const [isAddVoiceModalOpen, setIsAddVoiceModalOpen] = useState(false);
-  const { authenticated, login, logout, user, connectWallet } = usePrivy();
+  const { authenticated, login, logout, user, connectWallet, ready } = usePrivy();
   const { wallets } = useWallets();
   // useWallets (solana) only has wallets when actively connected via adapter.
   // After a refresh, fall back to the persisted address from Privy's user object.
@@ -519,6 +519,12 @@ export default function AgentsSocialPage() {
       a.type === 'wallet' && 'chainType' in a && (a as any).chainType === 'solana'
   );
   const connectedAddress = wallets[0]?.address || (linkedSolanaWallet as any)?.address;
+
+  // #region agent log — H1/H4: Privy state on render
+  React.useEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgentsSocialPage.tsx:privyState',message:'Privy state on mount/change',data:{ready,authenticated,hasUser:!!user,userLinkedAccounts:user?.linkedAccounts?.map((a:any)=>({type:a.type,chainType:a.chainType,address:a.address?.slice(0,8)})),walletsCount:wallets.length,walletDetails:wallets.map((w:any)=>({addr:w.address?.slice(0,8),type:w.walletClientType,chain:w.chainType})),connectedAddress:connectedAddress?.slice(0,8)},timestamp:Date.now(),hypothesisId:'H1_H4',runId:'run1'})}).catch(()=>{});
+  }, [ready, authenticated, wallets.length]);
+  // #endregion
 
   // Track previous doc IDs that were already "done" for auto-play
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
@@ -676,9 +682,20 @@ export default function AgentsSocialPage() {
                   <motion.button
                     onClick={authenticated ? async () => {
                       if (wallets.length === 0) {
-                        // After a page refresh, the Solana wallet adapter hasn't reconnected.
-                        // Prompt the user to reconnect before opening the modal.
-                        try { await connectWallet(); } catch { return; }
+                        // #region agent log — H1/H2: connectWallet attempt
+                        fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgentsSocialPage.tsx:connectWallet:pre',message:'About to call connectWallet()',data:{authenticated,walletsCount:wallets.length,hasUser:!!user},timestamp:Date.now(),hypothesisId:'H1_H2',runId:'run1'})}).catch(()=>{});
+                        // #endregion
+                        try {
+                          const result = await connectWallet();
+                          // #region agent log — H1/H2: connectWallet success
+                          fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgentsSocialPage.tsx:connectWallet:success',message:'connectWallet() succeeded',data:{result:JSON.stringify(result)?.slice(0,300)},timestamp:Date.now(),hypothesisId:'H1_H2',runId:'run1'})}).catch(()=>{});
+                          // #endregion
+                        } catch (connectErr: any) {
+                          // #region agent log — H1/H2: connectWallet error
+                          fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgentsSocialPage.tsx:connectWallet:error',message:'connectWallet() failed',data:{name:connectErr?.name,message:connectErr?.message?.slice(0,300),code:connectErr?.code,type:typeof connectErr,stringified:String(connectErr).slice(0,300)},timestamp:Date.now(),hypothesisId:'H1_H2',runId:'run1'})}).catch(()=>{});
+                          // #endregion
+                          return;
+                        }
                       }
                       setIsAddVoiceModalOpen(true);
                     } : login}

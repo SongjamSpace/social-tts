@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useWallets, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
-import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, Transaction, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import bs58 from "bs58";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/services/firebase.service";
@@ -28,6 +29,10 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
     
     // Wallet should already be connected before modal opens (handled by AgentsSocialPage)
     const solanaWallet = wallets[0];
+
+    // #region agent log — H3: wallet state
+    fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:handleSubmit:entry',message:'Wallet state at submit',data:{walletCount:wallets.length,wallet0Address:solanaWallet?.address,wallet0Type:(solanaWallet as any)?.walletClientType,wallet0ChainType:(solanaWallet as any)?.chainType,allWallets:wallets.map((w:any)=>({addr:w.address,type:w.walletClientType,chain:w.chainType}))},timestamp:Date.now(),hypothesisId:'H3',runId:'run1'})}).catch(()=>{});
+    // #endregion
     
     if (!solanaWallet) {
       alert("Please connect a valid Solana wallet first!");
@@ -55,6 +60,17 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       const sdk = new PumpSdk();
       const mint = Keypair.generate();
 
+      const MIN_SOL_REQUIRED = 0.022;
+      const balance = await connection.getBalance(publicKey);
+      // #region agent log — balance check
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:balanceCheck',message:'Wallet balance',data:{balanceLamports:balance,balanceSol:balance/LAMPORTS_PER_SOL,minRequired:MIN_SOL_REQUIRED},timestamp:Date.now(),hypothesisId:'balance',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      if (balance < MIN_SOL_REQUIRED * LAMPORTS_PER_SOL) {
+        throw new Error(
+          `Insufficient SOL balance. You have ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL but need at least ~${MIN_SOL_REQUIRED} SOL to create a token on pump.fun. Please fund your wallet and try again.`
+        );
+      }
+
       // 4. Create Token Metadata via Firebase (short paths to keep URL < 200 chars)
       const shortMint = mint.publicKey.toBase58().slice(0, 8);
       console.log("Uploading image to Firebase Storage for metadata...");
@@ -81,9 +97,17 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       const metadataUrl = await getDownloadURL(metadataStorageRef);
       console.log("Metadata URL length:", metadataUrl.length, metadataUrl);
 
+      // #region agent log — H1: metadata URI length
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:metadataUrl',message:'Metadata URL details',data:{metadataUrlLength:metadataUrl.length,imageUrlLength:finalImageUrl.length,metadataUrl:metadataUrl.slice(0,100)+'...',imageUrl:finalImageUrl.slice(0,100)+'...'},timestamp:Date.now(),hypothesisId:'H1',runId:'run1'})}).catch(()=>{});
+      // #endregion
+
       // 5. Build & Send Create Transaction (using V2 instruction)
       console.log("Deploying token...", mint.publicKey.toBase58());
       
+      // #region agent log — H2: PumpSdk state
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:preSdkCall',message:'PumpSdk and instruction params',data:{sdkType:typeof sdk,sdkKeys:Object.keys(sdk),mintPubkey:mint.publicKey.toBase58(),creatorPubkey:publicKey.toBase58(),tokenName,symbol,uriLength:metadataUrl.length},timestamp:Date.now(),hypothesisId:'H2',runId:'run1'})}).catch(()=>{});
+      // #endregion
+
       const createIx = await sdk.createV2Instruction({
         mint: mint.publicKey,
         name: tokenName,
@@ -93,6 +117,10 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         user: publicKey,
         mayhemMode: false,
       });
+
+      // #region agent log — H4/H5: instruction details
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:postCreateIx',message:'CreateV2 instruction details',data:{programId:createIx.programId?.toBase58(),numKeys:createIx.keys?.length,signers:createIx.keys?.filter((k:any)=>k.isSigner).map((k:any)=>({pubkey:k.pubkey.toBase58(),isWritable:k.isWritable})),dataLength:createIx.data?.length},timestamp:Date.now(),hypothesisId:'H4_H5',runId:'run1'})}).catch(()=>{});
+      // #endregion
       
       const createTx = new Transaction().add(createIx);
 
@@ -102,29 +130,42 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       createTx.feePayer = publicKey;
       createTx.partialSign(mint);
 
-      /* 
-      // Simulate first to get detailed error logs
-      const simulation = await connection.simulateTransaction(createTx);
-      if (simulation.value.err) {
-        console.error("Simulation failed:", simulation.value.err);
-        console.error("Simulation logs:", simulation.value.logs);
-        
-        const errObj = simulation.value.err as any;
-        if (errObj && typeof errObj === 'object' && 'InsufficientFundsForRent' in errObj) {
-          throw new Error("Insufficient SOL in your wallet to cover the rent or transaction fees. Please fund your wallet and try again.");
-        }
-        
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}\nLogs: ${simulation.value.logs?.join('\n')}`);
-      }
-      console.log("Simulation passed, requesting signature...");
-      */
-
       const serializedCreateTx = createTx.serialize({ requireAllSignatures: false });
-      const { signature } = await signAndSendTransaction({
+
+      // #region agent log — transaction before signing
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:preSend',message:'Transaction before signAndSend',data:{serializedLength:serializedCreateTx.length,feePayer:createTx.feePayer?.toBase58(),recentBlockhash:createTx.recentBlockhash?.slice(0,16)+'...'},timestamp:Date.now(),hypothesisId:'tx',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+
+      const { signature: rawSignature } = await signAndSendTransaction({
         transaction: serializedCreateTx,
         wallet: solanaWallet as any,
       });
-      console.log("Token created! Signature:", signature);
+
+      const txSignature = typeof rawSignature === 'string'
+        ? rawSignature
+        : bs58.encode(rawSignature instanceof Uint8Array ? rawSignature : Buffer.from((rawSignature as any).data || rawSignature));
+
+      // #region agent log — post send
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:postSend',message:'signAndSendTransaction returned',data:{txSignature,rawType:typeof rawSignature,isBuffer:Buffer.isBuffer(rawSignature)},timestamp:Date.now(),hypothesisId:'tx',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+
+      console.log("Transaction sent, confirming...", txSignature);
+
+      const confirmation = await connection.confirmTransaction(
+        { signature: txSignature, blockhash: latestBlockhash.blockhash, lastValidBlockHeight: latestBlockhash.lastValidBlockHeight },
+        "confirmed"
+      );
+
+      if (confirmation.value.err) {
+        // #region agent log — confirmation failed
+        fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:confirmFail',message:'Transaction failed on-chain',data:{err:JSON.stringify(confirmation.value.err),txSignature},timestamp:Date.now(),hypothesisId:'tx',runId:'post-fix'})}).catch(()=>{});
+        // #endregion
+        throw new Error(
+          `Token creation transaction failed on-chain. Check the transaction on Solscan: https://solscan.io/tx/${txSignature}`
+        );
+      }
+
+      console.log("Token created! Signature:", txSignature);
 
       // Now handle fee sharing in a separate transaction
       const splitWalletAddress = process.env.NEXT_PUBLIC_SPLIT_WALLET;
@@ -203,8 +244,16 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
       setImageFile(null);
       setCreatorSplit(50);
     } catch (err) {
+      // #region agent log — error catch
+      fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddVoiceModal.tsx:catch',message:'Error caught in handleSubmit',data:{isError:err instanceof Error,name:(err as any)?.name,message:(err as any)?.message?.slice(0,500),code:(err as any)?.code,type:typeof err,stringified:String(err).slice(0,500),stack:(err as any)?.stack?.slice(0,300)},timestamp:Date.now(),hypothesisId:'all',runId:'run1'})}).catch(()=>{});
+      // #endregion
       console.error(err);
-      alert(err instanceof Error ? err.message : String(err));
+      const errMsg = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'message' in err)
+          ? (err as any).message
+          : String(err);
+      alert(errMsg);
     }
     setLoading(false);
   };

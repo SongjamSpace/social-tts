@@ -108,6 +108,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
+  // #region agent log — H1/H4: Privy provider config
+  useEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'providers.tsx:mount',message:'Privy provider mounted',data:{appId:process.env.NEXT_PUBLIC_PRIVY_APP_ID?.slice(0,10)+'...',hostname:typeof window!=='undefined'?window.location.hostname:'ssr',origin:typeof window!=='undefined'?window.location.origin:'ssr',solanaConnectorsType:typeof solanaConnectors,solanaConnectorsKeys:Object.keys(solanaConnectors||{})},timestamp:Date.now(),hypothesisId:'H1_H4',runId:'run1'})}).catch(()=>{});
+  }, []);
+  // #endregion
+
   return (
     <PrivyProvider
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ""}
