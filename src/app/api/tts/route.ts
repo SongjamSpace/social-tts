@@ -88,13 +88,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       text,
-      voiceModel = "mrkrabs",
+      voiceModel = "",
       ttsVoice = "en-US-ChristopherNeural",
     } = body as { text: string; voiceModel?: string; ttsVoice?: string };
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json(
         { status: "error", message: "text is required" },
+        { status: 400 }
+      );
+    }
+    if (!voiceModel || voiceModel.trim().length === 0) {
+      return NextResponse.json(
+        { status: "error", message: "voiceModel is required" },
         { status: 400 }
       );
     }

@@ -118,26 +118,11 @@ export async function getVoiceModelById(
 }
 
 /**
- * Seed the MrKrabs default voice model if it doesn't exist
+ * Seed default voice models in the voice_models collection if they don't exist.
+ * Currently no defaults; extend the array to seed curated models.
  */
 export async function seedDefaultVoiceModels(): Promise<void> {
-  const defaults: VoiceModel[] = [
-    {
-      id: "mrkrabs",
-      name: "Mr. Krabs",
-      description:
-        "The money-loving crustacean from Bikini Bottom. Iconic, greedy, unforgettable. Uncensored.",
-      avatar_url:
-        "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media",
-      category: "character",
-      tags: ["spongebob", "character", "funny", "uncensored"],
-      hf_model_id: "facebook/mms-tts-eng",
-      sample_rate: 16000,
-      is_active: true,
-      play_count: 420,
-      created_at: Timestamp.now(),
-    },
-  ];
+  const defaults: VoiceModel[] = [];
 
   for (const model of defaults) {
     const docRef = doc(db, VOICE_MODELS_COLLECTION, model.id);

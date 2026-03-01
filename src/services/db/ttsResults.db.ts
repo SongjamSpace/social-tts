@@ -24,8 +24,8 @@ export interface TtsResultCreatedBy {
 export interface TtsResult {
   id: string;
   // Voice / generation params
-  voice_model: string;   // e.g. "mrkrabs"
-  voice_model_name: string; // e.g. "Mr. Krabs"
+  voice_model: string;   // e.g. voice model id
+  voice_model_name: string; // e.g. "My Voice"
   tts_voice: string;        // e.g. "en-US-ChristopherNeural"
   text: string;
   audio_url?: string;       // Firebase Storage URL once generated

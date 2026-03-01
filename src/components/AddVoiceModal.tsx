@@ -21,7 +21,7 @@ import { downloadAndProcessVoiceModel } from "@/lib/rvcHf";
 
 const EVE_MINT = new PublicKey(process.env.NEXT_PUBLIC_EVE_MINT || "4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump");
 const PLATFORM_WALLET = new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET || "6DqLQfhiDNsLWtSs3iFbXUXQ8eDshVcmXjRBUC5XsS92");
-const SOL_FEE_EQUIVALENT = 0.1;
+const SOL_FEE_EQUIVALENT = 0.01;
 
 function toBase58Sig(raw: any): string {
   if (typeof raw === "string") return raw;
@@ -607,11 +607,11 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1.5">Token Name</label>
-              <input required type="text" value={tokenName} onChange={(e) => setTokenName(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. Krabs Coin" />
+              <input required type="text" value={tokenName} onChange={(e) => setTokenName(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. My Voice Coin" />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1.5">Symbol</label>
-              <input required type="text" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. KRABS" />
+              <input required type="text" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="e.g. VOICE" />
             </div>
           </div>
           <div>

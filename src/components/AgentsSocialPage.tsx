@@ -126,9 +126,7 @@ export interface AppModel {
   tokenAddress?: string | null;
 }
 
-const STATIC_MODELS: AppModel[] = [
-  { id: "mrkrabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "spongebob • character", plays: 42000 },
-];
+const STATIC_MODELS: AppModel[] = [];
 
 function ModelSidebarCard({ model, isSelected, onClick }: { model: AppModel; isSelected: boolean; onClick: () => void }) {
   return (
@@ -353,14 +351,14 @@ function TtsCard({
 }
 
 // ─── TTS Generate input ────────────────────────────────────────────────────────
-function GenerateInput({ model }: { model: AppModel }) {
+function GenerateInput({ model }: { model: AppModel | null }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<TtsStatus | null>(null);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!model || !text.trim()) return;
     setLoading(true);
     setStatus(null);
 
@@ -433,6 +431,14 @@ function GenerateInput({ model }: { model: AppModel }) {
     }
   };
 
+  if (!model) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+        <p className="text-sm text-zinc-500">Create a voice above to generate clips.</p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handle}>
       <div className={`relative rounded-2xl border transition-all ${text ? "border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.08)]" : "border-white/8"} bg-white/[0.025]`}>
@@ -503,7 +509,7 @@ function GenerateInput({ model }: { model: AppModel }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function AgentsSocialPage() {
-  const [activeId, setActiveId] = useState("mrkrabs");
+  const [activeId, setActiveId] = useState("");
   const [cards, setCards] = useState<LiveCard[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const seededRef = useRef(false);
@@ -604,7 +610,27 @@ export default function AgentsSocialPage() {
     })),
   ];
 
-  const activeModel = allModels.find((m) => m.id === activeId) || allModels[0];
+  // When list loads or current selection is missing, pick first model
+  useEffect(() => {
+    const list = [
+      ...STATIC_MODELS,
+      ...ttsVoiceModels.map((m) => ({
+        id: m.id!,
+        name: m.model_name,
+        avatar: m.image_url || null,
+        tag: `$${m.symbol} • ${m.creator_split}% crt`,
+        plays: 0,
+        tokenAddress: m.token_address || null,
+      })),
+    ];
+    if (list.length === 0) return;
+    setActiveId((prev) =>
+      !prev || !list.some((m) => m.id === prev) ? list[0].id : prev
+    );
+  }, [ttsVoiceModels]);
+
+  const activeModel =
+    allModels.find((m) => m.id === activeId) ?? allModels[0] ?? null;
 
   return (
     <div className="relative min-h-screen bg-[#060608] text-white overflow-x-hidden">
@@ -739,7 +765,7 @@ export default function AgentsSocialPage() {
                 className="mb-5 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  {activeModel.avatar ? (
+                  {activeModel?.avatar ? (
                     <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/30 shrink-0">
                       <img src={activeModel.avatar} alt={activeModel.name} className="w-full h-full object-cover" />
                     </div>
@@ -747,9 +773,9 @@ export default function AgentsSocialPage() {
                   <div>
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                       <Headphones className="w-5 h-5 text-red-400" />
-                      {activeModel.name}
-                      <span className="text-zinc-600 font-normal text-sm">says…</span>
-                      {activeModel.tokenAddress && (
+                      {activeModel ? activeModel.name : "No voice selected"}
+                      {activeModel && <span className="text-zinc-600 font-normal text-sm">says…</span>}
+                      {activeModel?.tokenAddress && (
                         <a
                           href={`https://pump.fun/coin/${activeModel.tokenAddress}`}
                           target="_blank"
@@ -761,7 +787,7 @@ export default function AgentsSocialPage() {
                         </a>
                       )}
                     </h2>
-                    <p className="text-[11px] text-zinc-600">{cards.length} clips</p>
+                    <p className="text-[11px] text-zinc-600">{activeModel ? `${cards.length} clips` : "Create a voice to get started"}</p>
                   </div>
                 </div>
 

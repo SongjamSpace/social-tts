@@ -20,7 +20,7 @@ export interface TtsStatus {
 
 export interface TtsOptions {
   text: string;
-  voiceModel?: string;        // default "mrkrabs"
+  voiceModel?: string;        // required; no default
   ttsVoice?: string;          // default "en-US-ChristopherNeural"
   onStatus: (status: TtsStatus) => void;
 }
@@ -40,7 +40,7 @@ export interface TtsOptions {
 export async function generateTts(options: TtsOptions): Promise<void> {
   const {
     text,
-    voiceModel = "mrkrabs",
+    voiceModel = "",
     ttsVoice = "en-US-ChristopherNeural",
     onStatus,
   } = options;
