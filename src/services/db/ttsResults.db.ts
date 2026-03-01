@@ -24,8 +24,7 @@ export interface TtsResultCreatedBy {
 export interface TtsResult {
   id: string;
   // Voice / generation params
-  voice_model: string;      // e.g. "mrkrabs"
-  voice_model_slug: string; // e.g. "mr-krabs" (display slug)
+  voice_model: string;   // e.g. "mrkrabs"
   voice_model_name: string; // e.g. "Mr. Krabs"
   tts_voice: string;        // e.g. "en-US-ChristopherNeural"
   text: string;
@@ -48,13 +47,13 @@ const TTS_RESULTS_COLLECTION = "tts_results";
  * Subscribe to TTS results for a specific voice model
  */
 export function subscribeToTtsResults(
-  voiceModelSlug: string,
+  voiceModelId: string,
   callback: (results: TtsResult[]) => void
 ): () => void {
   const colRef = collection(db, TTS_RESULTS_COLLECTION);
   const q = query(
     colRef,
-    where("voice_model_slug", "==", voiceModelSlug),
+    where("voice_model", "==", voiceModelId),
     orderBy("created_at", "desc"),
     limit(40)
   );
@@ -80,7 +79,7 @@ export function subscribeToTtsResults(
  * @deprecated Use createTtsResultDoc instead
  */
 export async function createTtsRequest(
-  voiceModelSlug: string,
+  voiceModelId: string,
   voiceModelName: string,
   text: string
 ): Promise<string> {
@@ -89,9 +88,8 @@ export async function createTtsRequest(
   else if (text.length > 30) cardSize = "md";
 
   const docRef = await addDoc(collection(db, TTS_RESULTS_COLLECTION), {
-    voice_model_slug: voiceModelSlug,
+    voice_model: voiceModelId,
     voice_model_name: voiceModelName,
-    voice_model: voiceModelSlug,
     tts_voice: "",
     text,
     status: "pending",
@@ -112,21 +110,19 @@ export async function createTtsRequest(
  */
 export async function createTtsResultDoc(params: {
   text: string;
-  voiceModel: string;
-  voiceModelSlug: string;
+  voiceModelId: string;
   voiceModelName: string;
   ttsVoice: string;
   createdBy: TtsResultCreatedBy;
 }): Promise<string> {
-  const { text, voiceModel, voiceModelSlug, voiceModelName, ttsVoice, createdBy } = params;
+  const { text, voiceModelId, voiceModelName, ttsVoice, createdBy } = params;
 
   let cardSize: TtsResult["card_size"] = "sm";
   if (text.length > 80) cardSize = "lg";
   else if (text.length > 30) cardSize = "md";
 
   const docRef = await addDoc(collection(db, TTS_RESULTS_COLLECTION), {
-    voice_model: voiceModel,
-    voice_model_slug: voiceModelSlug,
+    voice_model: voiceModelId,
     voice_model_name: voiceModelName,
     tts_voice: ttsVoice,
     text,

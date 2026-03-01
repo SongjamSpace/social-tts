@@ -14,7 +14,7 @@ import {
 import { db } from "@/services/firebase.service";
 
 export interface TtsVoiceModel {
-  id?: string;
+  id: string;
   model_url: string;
   model_name: string;
   token_name: string;
@@ -29,15 +29,19 @@ export interface TtsVoiceModel {
   created_at: Timestamp;
 }
 
-export async function addTtsVoiceModel(data: Omit<TtsVoiceModel, "created_at" | "id">) {
-  const ref = collection(db, "tts_voice_models");
-  // Use addDoc or create a new doc ref then setDoc
-  const newDocRef = doc(ref);
-  await setDoc(newDocRef, {
+export async function addTtsVoiceModel(id: string, data: Omit<TtsVoiceModel, "created_at">) {
+  const docRef = doc(db, "tts_voice_models", id);
+  await setDoc(docRef, {
     ...data,
     created_at: Timestamp.now(),
   });
-  return newDocRef.id;
+  return id;
+}
+
+export async function checkTtsVoiceModelExists(id: string): Promise<boolean> {
+  const docRef = doc(db, "tts_voice_models", id);
+  const snap = await getDoc(docRef);
+  return snap.exists();
 }
 
 export async function updateTtsVoiceModel(id: string, data: Partial<Omit<TtsVoiceModel, "id" | "created_at">>) {
@@ -50,7 +54,7 @@ export function subscribeToTtsVoiceModels(callback: (models: TtsVoiceModel[]) =>
   const q = query(ref, orderBy("created_at", "desc"));
   return onSnapshot(q, (snap) => {
     const models: TtsVoiceModel[] = [];
-    snap.forEach((d) => models.push({ id: d.id, ...d.data() } as TtsVoiceModel));
+    snap.forEach((d) => models.push({ ...d.data() } as TtsVoiceModel));
     callback(models);
   });
 }
@@ -58,7 +62,6 @@ export function subscribeToTtsVoiceModels(callback: (models: TtsVoiceModel[]) =>
 export interface VoiceModel {
   id: string;
   name: string;
-  slug: string; // e.g. "mr-krabs"
   description: string;
   avatar_url: string;
   category: "character" | "celebrity" | "original" | "uncensored";
@@ -97,14 +100,11 @@ export function subscribeToVoiceModels(
   );
 }
 
-/**
- * Get a single voice model by slug
- */
-export async function getVoiceModelBySlug(
-  slug: string
+export async function getVoiceModelById(
+  id: string
 ): Promise<VoiceModel | null> {
   try {
-    const docRef = doc(db, VOICE_MODELS_COLLECTION, slug);
+    const docRef = doc(db, VOICE_MODELS_COLLECTION, id);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       return { id: snap.id, ...snap.data() } as VoiceModel;
@@ -120,10 +120,10 @@ export async function getVoiceModelBySlug(
  * Seed the MrKrabs default voice model if it doesn't exist
  */
 export async function seedDefaultVoiceModels(): Promise<void> {
-  const defaults: Omit<VoiceModel, "id">[] = [
+  const defaults: VoiceModel[] = [
     {
+      id: "mrkrabs",
       name: "Mr. Krabs",
-      slug: "mr-krabs",
       description:
         "The money-loving crustacean from Bikini Bottom. Iconic, greedy, unforgettable. Uncensored.",
       avatar_url:
@@ -139,7 +139,7 @@ export async function seedDefaultVoiceModels(): Promise<void> {
   ];
 
   for (const model of defaults) {
-    const docRef = doc(db, VOICE_MODELS_COLLECTION, model.slug);
+    const docRef = doc(db, VOICE_MODELS_COLLECTION, model.id);
     const snap = await getDoc(docRef);
     if (!snap.exists()) {
       await setDoc(docRef, model);

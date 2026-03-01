@@ -118,7 +118,7 @@ function GridBackground() {
 
 // ─── Voice model sidebar card ──────────────────────────────────────────────────
 export interface AppModel {
-  slug: string;
+  id: string;
   name: string;
   avatar?: string | null;
   tag?: string;
@@ -127,7 +127,7 @@ export interface AppModel {
 }
 
 const STATIC_MODELS: AppModel[] = [
-  { slug: "mr-krabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "spongebob • character", plays: 42000 },
+  { id: "mrkrabs", name: "Mr. Krabs", avatar: "https://firebasestorage.googleapis.com/v0/b/lustrous-stack-453106-f6.firebasestorage.app/o/agents%2Fkrabs.png?alt=media", tag: "spongebob • character", plays: 42000 },
 ];
 
 function ModelSidebarCard({ model, isSelected, onClick }: { model: AppModel; isSelected: boolean; onClick: () => void }) {
@@ -366,7 +366,7 @@ function GenerateInput({ model }: { model: AppModel }) {
 
     const capturedText = text.trim();
     setText(""); // Clear input immediately after capture
-    const voiceModel = model.slug === "mr-krabs" ? "mrkrabs" : model.name;
+    const voiceModelId = model.id;
     const ttsVoice = "en-US-ChristopherNeural";
 
     // Ensure the user is signed in with Twitter before generating
@@ -397,7 +397,7 @@ function GenerateInput({ model }: { model: AppModel }) {
     try {
       await generateTts({
         text: capturedText,
-        voiceModel,
+        voiceModel: voiceModelId,
         ttsVoice,
         onStatus: (s) => {
           console.log("TTS status:", s);
@@ -410,8 +410,7 @@ function GenerateInput({ model }: { model: AppModel }) {
               try {
                 const docId = await createTtsResultDoc({
                   text: capturedText,
-                  voiceModel,
-                  voiceModelSlug: model.slug,
+                  voiceModelId,
                   voiceModelName: model.name,
                   ttsVoice,
                   createdBy,
@@ -504,7 +503,7 @@ function GenerateInput({ model }: { model: AppModel }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function AgentsSocialPage() {
-  const [activeSlug, setActiveSlug] = useState("mr-krabs");
+  const [activeId, setActiveId] = useState("mrkrabs");
   const [cards, setCards] = useState<LiveCard[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const seededRef = useRef(false);
@@ -533,7 +532,7 @@ export default function AgentsSocialPage() {
     prevDoneIdsRef.current = new Set();
     isFirstSnapshotRef.current = true;
 
-    const unsub = subscribeToTtsResults(activeSlug, (results) => {
+    const unsub = subscribeToTtsResults(activeId, (results) => {
       const newCards = results.map(toCard);
 
       if (!isFirstSnapshotRef.current) {
@@ -560,7 +559,7 @@ export default function AgentsSocialPage() {
     });
 
     return unsub;
-  }, [activeSlug]);
+  }, [activeId]);
 
   const handlePlay = useCallback((id: string) => {
     setPlayingId((prev) => {
@@ -596,7 +595,7 @@ export default function AgentsSocialPage() {
   const allModels: AppModel[] = [
     ...STATIC_MODELS,
     ...ttsVoiceModels.map((m) => ({
-      slug: m.id!,
+      id: m.id!,
       name: m.model_name,
       avatar: m.image_url || null,
       tag: `$${m.symbol} • ${m.creator_split}% crt`,
@@ -605,7 +604,7 @@ export default function AgentsSocialPage() {
     })),
   ];
 
-  const activeModel = allModels.find((m) => m.slug === activeSlug) || allModels[0];
+  const activeModel = allModels.find((m) => m.id === activeId) || allModels[0];
 
   return (
     <div className="relative min-h-screen bg-[#060608] text-white overflow-x-hidden">
@@ -665,8 +664,8 @@ export default function AgentsSocialPage() {
                 </div>
                 <div className="space-y-2">
                   {allModels.map((m, i) => (
-                    <motion.div key={m.slug} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.07 }}>
-                      <ModelSidebarCard model={m} isSelected={activeSlug === m.slug} onClick={() => setActiveSlug(m.slug)} />
+                    <motion.div key={m.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.07 }}>
+                      <ModelSidebarCard model={m} isSelected={activeId === m.id} onClick={() => setActiveId(m.id)} />
                     </motion.div>
                   ))}
                 </div>
@@ -735,7 +734,7 @@ export default function AgentsSocialPage() {
             <div className="flex-1 min-w-0">
               {/* Header */}
               <motion.div
-                key={activeSlug}
+                key={activeId}
                 initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
                 className="mb-5 flex items-center justify-between"
               >
@@ -799,7 +798,7 @@ export default function AgentsSocialPage() {
               {/* 3-col masonry */}
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={activeSlug}
+                  key={activeId}
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
                   className="grid grid-cols-2 sm:grid-cols-3 gap-3 items-start"

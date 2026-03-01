@@ -6,7 +6,7 @@ import { Connection, Keypair, Transaction, PublicKey } from "@solana/web3.js";
 import { PumpSdk } from "@pump-fun/pump-sdk";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/services/firebase.service";
-import { addTtsVoiceModel, updateTtsVoiceModel } from "@/services/db/voiceModels.db";
+import { addTtsVoiceModel, updateTtsVoiceModel, checkTtsVoiceModelExists } from "@/services/db/voiceModels.db";
 import { downloadAndProcessVoiceModel } from "@/lib/rvcHf";
 
 export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -41,6 +41,14 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
 
     setLoading(true);
     try {
+      const modelId = modelName.toLowerCase().replace(/\s+/g, ""); // Remove spaces
+      const exists = await checkTtsVoiceModelExists(modelId);
+      if (exists) {
+        alert("A voice model with this name already exists. Please choose a different name.");
+        setLoading(false);
+        return;
+      }
+
       // 1. Setup Solana Provider & PumpSdk
       const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
       const publicKey = new PublicKey(solanaWallet.address);
@@ -166,10 +174,11 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
 
       // 2. Call Gradio API First
       console.log("Calling Gradio API...");
-      const result = await downloadAndProcessVoiceModel(modelUrl, modelName);
+      const result = await downloadAndProcessVoiceModel(modelUrl, modelId);
       console.log("Gradio API result:", (result as any).data);
 
-      const docId = await addTtsVoiceModel({
+      const docId = await addTtsVoiceModel(modelId, {
+        id: modelId,
         model_url: modelUrl,
         model_name: modelName,
         token_name: tokenName,
