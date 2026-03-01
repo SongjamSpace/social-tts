@@ -437,18 +437,24 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
             walletPayload.body = await walletRes.text();
           } catch (_) {}
         }
-        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:wallet-generate", message: "Wallet generation API result", data: walletPayload, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
+        const h1Payload = { location: "AddVoiceModal.tsx:wallet-generate", message: "Wallet generation API result", data: walletPayload, timestamp: Date.now(), hypothesisId: "H1" };
+        console.log("[fee-share-debug]", JSON.stringify(h1Payload));
+        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h1Payload) }).catch(() => {});
         // #endregion
       } catch (walletErr) {
         // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:wallet-generate-catch", message: "Wallet generation threw", data: { err: String(walletErr) }, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
+        const h1CatchPayload = { location: "AddVoiceModal.tsx:wallet-generate-catch", message: "Wallet generation threw", data: { err: String(walletErr) }, timestamp: Date.now(), hypothesisId: "H1" };
+        console.log("[fee-share-debug]", JSON.stringify(h1CatchPayload));
+        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h1CatchPayload) }).catch(() => {});
         // #endregion
         console.error("Failed to generate voice owner wallet:", walletErr);
       }
 
       // #region agent log
       const willEnterFeeSharing = !!(ownerWalletPubkey && creatorSplit < 100);
-      fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-branch", message: "Fee sharing branch", data: { ownerWalletPubkey, creatorSplit, willEnterFeeSharing }, timestamp: Date.now(), hypothesisId: "H2" }) }).catch(() => {});
+      const h2Payload = { location: "AddVoiceModal.tsx:fee-sharing-branch", message: "Fee sharing branch", data: { ownerWalletPubkey, creatorSplit, willEnterFeeSharing }, timestamp: Date.now(), hypothesisId: "H2" };
+      console.log("[fee-share-debug]", JSON.stringify(h2Payload));
+      fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h2Payload) }).catch(() => {});
       // #endregion
 
       // Fee sharing — split creator rewards between deployer and voice owner wallet
@@ -491,7 +497,9 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
               });
               feeSig = toBase58Sig(feeRawSig);
               // #region agent log
-              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-sent", message: "Fee sharing tx sent", data: { feeSig }, timestamp: Date.now(), hypothesisId: "H3" }) }).catch(() => {});
+              const h3Payload = { location: "AddVoiceModal.tsx:fee-sharing-sent", message: "Fee sharing tx sent", data: { feeSig }, timestamp: Date.now(), hypothesisId: "H3" };
+              console.log("[fee-share-debug]", JSON.stringify(h3Payload));
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h3Payload) }).catch(() => {});
               // #endregion
               console.log("Fee sharing sent, confirming...", feeSig);
 
@@ -501,7 +509,9 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
                 "confirmed"
               );
               // #region agent log
-              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-confirm", message: "Fee sharing confirm result", data: { err: feeConfirm.value.err }, timestamp: Date.now(), hypothesisId: "H4" }) }).catch(() => {});
+              const h4Payload = { location: "AddVoiceModal.tsx:fee-sharing-confirm", message: "Fee sharing confirm result", data: { err: feeConfirm.value.err }, timestamp: Date.now(), hypothesisId: "H4" };
+              console.log("[fee-share-debug]", JSON.stringify(h4Payload));
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h4Payload) }).catch(() => {});
               // #endregion
               if (feeConfirm.value.err) {
                 console.error("Fee sharing tx failed on-chain:", feeSig);
@@ -511,14 +521,18 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
               }
             } catch (sendErr) {
               // #region agent log
-              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-send-catch", message: "Fee sharing signAndSend threw", data: { err: String(sendErr) }, timestamp: Date.now(), hypothesisId: "H3" }) }).catch(() => {});
+              const h3CatchPayload = { location: "AddVoiceModal.tsx:fee-sharing-send-catch", message: "Fee sharing signAndSend threw", data: { err: String(sendErr) }, timestamp: Date.now(), hypothesisId: "H3" };
+              console.log("[fee-share-debug]", JSON.stringify(h3CatchPayload));
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h3CatchPayload) }).catch(() => {});
               // #endregion
               throw sendErr;
             }
           }
         } catch (e) {
           // #region agent log
-          fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-catch", message: "Fee sharing catch", data: { err: String(e) }, timestamp: Date.now(), hypothesisId: "H5" }) }).catch(() => {});
+          const h5Payload = { location: "AddVoiceModal.tsx:fee-sharing-catch", message: "Fee sharing catch", data: { err: String(e) }, timestamp: Date.now(), hypothesisId: "H5" };
+          console.log("[fee-share-debug]", JSON.stringify(h5Payload));
+          fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(h5Payload) }).catch(() => {});
           // #endregion
           console.error("Error setting up fee sharing", e);
           alert("Token created but fee sharing setup failed. You can configure it later.");
