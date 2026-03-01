@@ -879,7 +879,7 @@ export default function AgentsSocialPage() {
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/10 text-xs font-semibold text-zinc-500 hover:text-zinc-300 hover:border-white/20 hover:bg-white/[0.03] transition-all"
                   >
                     <span className="text-base leading-none">+</span>
-                    Create Voice Token
+                    Create Voice Agent
                   </motion.button>
               </motion.div>
 
