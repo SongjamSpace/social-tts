@@ -27,6 +27,8 @@ export interface TtsVoiceModel {
   deployed?: boolean;
   token_address?: string;
   voice_owner_wallet?: string;
+  website_url?: string;
+  twitter_url?: string;
   created_at: Timestamp;
 }
 

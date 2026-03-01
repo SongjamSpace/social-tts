@@ -47,6 +47,8 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
   const [evePriceLoading, setEvePriceLoading] = useState(false);
 
   const [creatorBuySol, setCreatorBuySol] = useState<string>("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [twitterUrl, setTwitterUrl] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -193,9 +195,9 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         image: finalImageUrl,
         showName: true,
         createdOn: "https://pump.fun",
-        twitter: "",
+        twitter: twitterUrl.trim() || "",
         telegram: "",
-        website: "",
+        website: websiteUrl.trim() || "",
       };
 
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
@@ -562,6 +564,8 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
         token_address: mint.publicKey.toBase58(),
         image_url: finalImageUrl || undefined,
         ...(ownerWalletPubkey ? { voice_owner_wallet: ownerWalletPubkey } : {}),
+        ...(websiteUrl.trim() ? { website_url: websiteUrl.trim() } : {}),
+        ...(twitterUrl.trim() ? { twitter_url: twitterUrl.trim() } : {}),
       });
 
       window.open(`https://pump.fun/coin/${mint.publicKey.toBase58()}`, "_blank");
@@ -617,6 +621,15 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Token Image</label>
             <input required type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 focus:outline-none focus:border-red-500/50" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Website (optional)</label>
+            <input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="https://..." />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">X / Twitter (optional)</label>
+            <input type="url" value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50" placeholder="https://x.com/..." />
           </div>
 
           {/* EVE Fee Display */}

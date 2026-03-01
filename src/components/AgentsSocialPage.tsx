@@ -124,6 +124,8 @@ export interface AppModel {
   tag?: string;
   plays?: number;
   tokenAddress?: string | null;
+  websiteUrl?: string | null;
+  twitterUrl?: string | null;
 }
 
 const STATIC_MODELS: AppModel[] = [];
@@ -607,6 +609,8 @@ export default function AgentsSocialPage() {
       tag: `$${m.symbol} • ${m.creator_split}% crt`,
       plays: 0,
       tokenAddress: m.token_address || null,
+      websiteUrl: m.website_url || null,
+      twitterUrl: m.twitter_url || null,
     })),
   ];
 
@@ -775,17 +779,41 @@ export default function AgentsSocialPage() {
                       <Headphones className="w-5 h-5 text-red-400" />
                       {activeModel ? activeModel.name : "No voice selected"}
                       {activeModel && <span className="text-zinc-600 font-normal text-sm">says…</span>}
-                      {activeModel?.tokenAddress && (
-                        <a
-                          href={`https://pump.fun/coin/${activeModel.tokenAddress}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[10px] font-mono font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
-                        >
-                          View on pump.fun
-                        </a>
-                      )}
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {activeModel?.tokenAddress && (
+                          <a
+                            href={`https://pump.fun/coin/${activeModel.tokenAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] font-mono font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
+                          >
+                            pump.fun
+                          </a>
+                        )}
+                        {activeModel?.websiteUrl && (
+                          <a
+                            href={activeModel.websiteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
+                          >
+                            Website
+                          </a>
+                        )}
+                        {activeModel?.twitterUrl && (
+                          <a
+                            href={activeModel.twitterUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] font-normal text-zinc-500 hover:text-red-400 transition-colors bg-white/5 px-2 py-0.5 rounded-md border border-white/5 hover:border-red-500/20"
+                          >
+                            X
+                          </a>
+                        )}
+                      </span>
                     </h2>
                     <p className="text-[11px] text-zinc-600">{activeModel ? `${cards.length} clips` : "Create a voice to get started"}</p>
                   </div>
