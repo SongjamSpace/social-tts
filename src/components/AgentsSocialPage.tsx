@@ -825,7 +825,7 @@ export default function AgentsSocialPage() {
 
         <footer className="mt-auto py-6 border-t border-white/5">
           <div className="max-w-6xl mx-auto px-4 text-center text-xs text-zinc-800">
-            © {new Date().getFullYear()} Moltspaces · TTS Social — voices that say the unsayable
+            © {new Date().getFullYear()} Eve Army · 4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump
           </div>
         </footer>
       </div>

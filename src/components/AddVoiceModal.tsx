@@ -423,14 +423,33 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ voiceModelId: modelId }),
         });
-        if (walletRes.ok) {
+        const walletOk = walletRes.ok;
+        const walletStatus = walletRes.status;
+        if (walletOk) {
           const data = await walletRes.json();
-          ownerWalletPubkey = data.publicKey;
+          ownerWalletPubkey = data.publicKey ?? null;
           console.log("Voice owner wallet generated:", ownerWalletPubkey);
         }
+        // #region agent log
+        const walletPayload: Record<string, unknown> = { ok: walletOk, status: walletStatus, publicKey: ownerWalletPubkey };
+        if (!walletOk) {
+          try {
+            walletPayload.body = await walletRes.text();
+          } catch (_) {}
+        }
+        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:wallet-generate", message: "Wallet generation API result", data: walletPayload, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
+        // #endregion
       } catch (walletErr) {
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:wallet-generate-catch", message: "Wallet generation threw", data: { err: String(walletErr) }, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
+        // #endregion
         console.error("Failed to generate voice owner wallet:", walletErr);
       }
+
+      // #region agent log
+      const willEnterFeeSharing = !!(ownerWalletPubkey && creatorSplit < 100);
+      fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-branch", message: "Fee sharing branch", data: { ownerWalletPubkey, creatorSplit, willEnterFeeSharing }, timestamp: Date.now(), hypothesisId: "H2" }) }).catch(() => {});
+      // #endregion
 
       // Fee sharing — split creator rewards between deployer and voice owner wallet
       if (ownerWalletPubkey && creatorSplit < 100) {
@@ -464,26 +483,43 @@ export default function AddVoiceModal({ isOpen, onClose }: { isOpen: boolean; on
 
             setStatusMsg("Approve fee sharing setup in your wallet...");
             const serializedFeeTx = feeSharingTx.serialize({ requireAllSignatures: false });
-            const { signature: feeRawSig } = await signAndSendTransaction({
-              transaction: serializedFeeTx,
-              wallet: solanaWallet as any,
-            });
-            const feeSig = toBase58Sig(feeRawSig);
-            console.log("Fee sharing sent, confirming...", feeSig);
+            let feeSig: string | null = null;
+            try {
+              const { signature: feeRawSig } = await signAndSendTransaction({
+                transaction: serializedFeeTx,
+                wallet: solanaWallet as any,
+              });
+              feeSig = toBase58Sig(feeRawSig);
+              // #region agent log
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-sent", message: "Fee sharing tx sent", data: { feeSig }, timestamp: Date.now(), hypothesisId: "H3" }) }).catch(() => {});
+              // #endregion
+              console.log("Fee sharing sent, confirming...", feeSig);
 
-            setStatusMsg("Confirming fee sharing on-chain...");
-            const feeConfirm = await connection.confirmTransaction(
-              { signature: feeSig, blockhash: feeBh.blockhash, lastValidBlockHeight: feeBh.lastValidBlockHeight },
-              "confirmed"
-            );
-            if (feeConfirm.value.err) {
-              console.error("Fee sharing tx failed on-chain:", feeSig);
-              alert("Token created but fee sharing setup failed on-chain. You can configure it later.");
-            } else {
-              console.log("Fee sharing confirmed:", feeSig);
+              setStatusMsg("Confirming fee sharing on-chain...");
+              const feeConfirm = await connection.confirmTransaction(
+                { signature: feeSig, blockhash: feeBh.blockhash, lastValidBlockHeight: feeBh.lastValidBlockHeight },
+                "confirmed"
+              );
+              // #region agent log
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-confirm", message: "Fee sharing confirm result", data: { err: feeConfirm.value.err }, timestamp: Date.now(), hypothesisId: "H4" }) }).catch(() => {});
+              // #endregion
+              if (feeConfirm.value.err) {
+                console.error("Fee sharing tx failed on-chain:", feeSig);
+                alert("Token created but fee sharing setup failed on-chain. You can configure it later.");
+              } else {
+                console.log("Fee sharing confirmed:", feeSig);
+              }
+            } catch (sendErr) {
+              // #region agent log
+              fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-send-catch", message: "Fee sharing signAndSend threw", data: { err: String(sendErr) }, timestamp: Date.now(), hypothesisId: "H3" }) }).catch(() => {});
+              // #endregion
+              throw sendErr;
             }
           }
         } catch (e) {
+          // #region agent log
+          fetch("http://127.0.0.1:7242/ingest/be185e9e-d26d-4cab-80be-f1fc706cc215", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "AddVoiceModal.tsx:fee-sharing-catch", message: "Fee sharing catch", data: { err: String(e) }, timestamp: Date.now(), hypothesisId: "H5" }) }).catch(() => {});
+          // #endregion
           console.error("Error setting up fee sharing", e);
           alert("Token created but fee sharing setup failed. You can configure it later.");
         }
