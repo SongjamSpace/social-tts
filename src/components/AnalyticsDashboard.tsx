@@ -69,6 +69,54 @@ function richTooltip(d: Deployer): string {
   </div>`;
 }
 
+/** Intro animation: particles burst from center, colored by deployer, with groupId for universalTransition merge into treemap. */
+function buildParticleOption(mindshareMax: number): EChartsOption {
+  const cx = 500;
+  const cy = 500;
+  const particles: { value: number[]; groupId: string; itemStyle: { color: string; opacity: number } }[] = [];
+
+  const seededRandom = (seed: number) => {
+    let s = seed;
+    return () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  };
+
+  DEPLOYERS.forEach((d, di) => {
+    const color = deployerColor(d, mindshareMax);
+    const count = 6 + Math.min(Math.round(d.mindshare / 10), 6);
+    const rng = seededRandom(di * 7919 + 31);
+
+    for (let j = 0; j < count; j++) {
+      const angle = rng() * Math.PI * 2;
+      const dist = 200 + rng() * 300;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      particles.push({
+        value: [x, y],
+        groupId: d.address,
+        itemStyle: { color, opacity: 0.5 + rng() * 0.5 },
+      });
+    }
+  });
+
+  return {
+    backgroundColor: "#060608",
+    tooltip: { show: false },
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
+    xAxis: { type: "value" as const, min: 0, max: 1000, show: false },
+    yAxis: { type: "value" as const, min: 0, max: 1000, show: false },
+    series: [{
+      type: "scatter",
+      id: "tokens",
+      universalTransition: { enabled: true },
+      symbolSize: (data: any) => 3 + Math.random() * 4,
+      data: particles,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      animationDelay: (idx: number) => idx * 4,
+    }],
+  } as any;
+}
+
 function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: () => void): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
   const tokens = deployer.topTokens;
@@ -755,6 +803,7 @@ export default function AnalyticsDashboard() {
   const [metric, setMetric] = useState<MetricKey>("mindshare");
   const [chartType, setChartType] = useState<ChartType>("treemap");
   const [selected, setSelected] = useState<Deployer | null>(null);
+  const [introPlaying, setIntroPlaying] = useState(true);
   const [expandingDeployer, setExpandingDeployer] = useState<Deployer | null>(null);
   const [splittingDeployer, setSplittingDeployer] = useState<Deployer | null>(null);
   const [expandedDeployer, setExpandedDeployer] = useState<Deployer | null>(null);
@@ -784,6 +833,9 @@ export default function AnalyticsDashboard() {
   }, [clearPhaseTimeout]);
 
   const option = useMemo(() => {
+    if (introPlaying && chartType === "treemap") {
+      return buildParticleOption(mindshareMax);
+    }
     if (chartType === "treemap" && expandingDeployer) {
       return buildExpandOption(expandingDeployer, mindshareMax);
     }
@@ -794,7 +846,13 @@ export default function AnalyticsDashboard() {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
     }
     return buildOption(chartType, metric, mindshareMax);
-  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack]);
+  }, [chartType, metric, mindshareMax, introPlaying, expandingDeployer, splittingDeployer, expandedDeployer, handleBack]);
+
+  useEffect(() => {
+    if (!introPlaying) return;
+    const t = setTimeout(() => setIntroPlaying(false), 1200);
+    return () => clearTimeout(t);
+  }, [introPlaying]);
 
   useEffect(() => {
     if (!expandingDeployer) return;
@@ -936,7 +994,7 @@ export default function AnalyticsDashboard() {
       {/* Footer */}
       <footer className="shrink-0 py-3 border-t border-white/5">
         <div className="flex items-center justify-center gap-3 text-[10px] text-zinc-700">
-          <span>© {new Date().getFullYear()} Eve Army · 4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump</span>
+          <span>© {new Date().getFullYear()} Eve · 4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump</span>
           <a
             href="https://discord.com/invite/n7vBHFf5VF"
             target="_blank"
