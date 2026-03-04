@@ -4,7 +4,7 @@ import { Providers } from "@/components/providers";
 import { ToastProvider } from "@/contexts/ToastContext";
 import Navbar from "@/components/Navbar";
 export const metadata: Metadata = {
-  title: "Eve Army – Pump.fun Analytics",
+  title: "Eve – Pump.fun Analytics",
   description:
     "Full-stack analytics for mindshare on pump.fun. Track top token deployers, volume, market cap, creator fees, and more.",
   manifest: "/manifest.json",
