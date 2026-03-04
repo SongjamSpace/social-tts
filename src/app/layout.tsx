@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ToastProvider } from "@/contexts/ToastContext";
+import Navbar from "@/components/Navbar";
 export const metadata: Metadata = {
-  title: "EVE – voices that say the unsayable",
+  title: "Eve Army – Pump.fun Analytics",
   description:
-    "Permissionless voice agents that pay the voice owner. Discover, play, and generate voices that say the unsayable.",
+    "Full-stack analytics for mindshare on pump.fun. Track top token deployers, volume, market cap, creator fees, and more.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -37,9 +38,10 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
         />
       </head>
-      <body className="antialiased">
+      <body className="antialiased bg-[#060608]">
         <ToastProvider>
           <Providers>
+            <Navbar />
             {children}
           </Providers>
         </ToastProvider>
