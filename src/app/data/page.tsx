@@ -39,11 +39,10 @@ export default function DataPage() {
   useEffect(() => {
     async function fetchDeployers() {
       try {
-        const res = await fetch("/api/pumpfun/recommended");
-        const json = await res.json();
+        const res = await fetch("https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k");
+        const coins: any[] = await res.json();
 
-        if (!json.success || !json.data) throw new Error("API returned no data");
-        const coins: any[] = json.data;
+        if (!Array.isArray(coins)) throw new Error("API returned unexpected format");
 
         const creatorMap = new Map<string, CreatorAggregate>();
 
@@ -315,6 +314,18 @@ function ExpandedDetail({ deployer }: { deployer: CreatorAggregate }) {
               label="Token Holdings"
               value={String(analytics.balanceSummary?.token_count ?? 0)}
             />
+            {analytics.fees?.totalFeesSOL && (
+              <Stat
+                label="Total Creator Fees"
+                value={`${analytics.fees.totalFeesSOL} SOL`}
+              />
+            )}
+            {analytics.fees?.totalFees && (
+              <Stat
+                label="Total Fees (USD)"
+                value={fmtUsd(parseFloat(analytics.fees.totalFees))}
+              />
+            )}
           </div>
 
           {/* Token balances */}
