@@ -94,10 +94,17 @@ export interface PumpFunBalanceToken {
   image_uri?: string;
 }
 
+export interface PumpFunCreatorFees {
+  totalFees?: string;
+  totalFeesSOL?: string;
+}
+
 export interface DeployerAnalytics {
   followers: PumpFunFollower[];
   following: PumpFunFollower[];
   balanceSummary: PumpFunBalanceSummary | null;
   balances: PumpFunBalanceToken[];
   createdCoins: PumpFunCoin[];
+  fees?: PumpFunCreatorFees | null;
 }
+

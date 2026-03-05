@@ -776,11 +776,12 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     async function fetchDeployers() {
       try {
-        const res = await fetch("/api/pumpfun/recommended");
-        const json = await res.json();
+        const res = await fetch("https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k");
+        const coins = await res.json();
         
-        if (!json.success || !json.data) throw new Error("Failed to fetch PumpFun coins");
-        const coins = json.data;
+        // if (!json.success || !json.data) throw new Error("Failed to fetch PumpFun coins");
+        
+        // const coins = json;
         
         // Aggregate coins by creator
         const creatorMap = new Map<string, CreatorAggregate>();

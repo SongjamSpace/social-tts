@@ -3,12 +3,11 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = searchParams.get('limit') || '300';
-    const includeNsfw = searchParams.get('includeNsfw') || 'false';
-    const userId = searchParams.get('userId') || 'BSBcd7BnKgDiKkraALKPA6Q4wmoqCvweGSaTZocB2G2X';
     
     // Construct the external API URL with query params
-    const apiUrl = `https://frontend-api-v3.pump.fun/coins/recommended?limit=${limit}&includeNsfw=${includeNsfw}&userId=${userId}`;
+    // const apiUrl = `https://frontend-api-v3.pump.fun/coins/recommended?limit=${limit}&includeNsfw=${includeNsfw}&userId=${userId}`;
+    const apiUrl = `https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k`;
+
 
     const res = await fetch(apiUrl, {
       next: { revalidate: 60 } // Cache the response for 60 seconds
