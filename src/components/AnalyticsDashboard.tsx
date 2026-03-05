@@ -1015,7 +1015,7 @@ export default function AnalyticsDashboard() {
       {/* Footer */}
       <footer className="shrink-0 py-3 border-t border-white/5">
         <div className="flex items-center justify-center gap-3 text-[10px] text-zinc-700">
-          <span>© {new Date().getFullYear()} Eve Army · 4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump</span>
+          <span>© {new Date().getFullYear()} Eve · 4mVbX7EZonRcEfiyFbbw2ByrYc7xAkUMp3NKWhDwpump</span>
           <a
             href="https://discord.com/invite/n7vBHFf5VF"
             target="_blank"
