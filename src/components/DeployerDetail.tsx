@@ -143,7 +143,7 @@ export default function DeployerDetail({ deployer, metricLabels, onClose }: Prop
                     </div>
 
                     {/* Followers & Following */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3">
                         <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Followers</p>
                         <p className="text-sm font-bold text-white">{analytics.followers?.length || 0}</p>
@@ -151,6 +151,12 @@ export default function DeployerDetail({ deployer, metricLabels, onClose }: Prop
                       <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3">
                         <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Following</p>
                         <p className="text-sm font-bold text-white">{analytics.following?.length || 0}</p>
+                      </div>
+                      <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Total Fees</p>
+                        <p className="text-sm font-bold text-white">
+                          {analytics.fees?.totalFeesSOL ? `${parseFloat(analytics.fees.totalFeesSOL).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} SOL` : "0 SOL"}
+                        </p>
                       </div>
                     </div>
 
