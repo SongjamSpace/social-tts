@@ -5,12 +5,11 @@ import { motion } from "framer-motion";
 import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, PieChart, ScatterChart, Activity, Target, Layers, Rows3, Circle } from "lucide-react";
 import type { EChartsOption } from "echarts";
 import {
-  DEPLOYERS,
   METRIC_LABELS,
   METRIC_UNITS,
-  type MetricKey,
-  type Deployer,
+  type MetricKey
 } from "@/lib/dummyData";
+import { type CreatorAggregate, type PumpFunCoin, type CreatorAggregateToken } from "@/types/pumpfun";
 import DeployerDetail from "./DeployerDetail";
 
 type ChartType = "treemap" | "bar" | "barH" | "pie" | "scatter" | "radar" | "sunburst" | "funnel" | "packed" | "line" | "heatmap";
@@ -40,7 +39,7 @@ function fmtCompact(v: number): string {
   return v.toLocaleString();
 }
 
-function deployerColor(d: Deployer, maxMs: number): string {
+function deployerColor(d: CreatorAggregate, maxMs: number): string {
   const norm = d.mindshare / maxMs;
   const r = Math.round(70 + norm * 169);
   const g = Math.round(20 + (1 - norm) * 20);
@@ -55,40 +54,40 @@ const TOOLTIP_BASE = {
   extraCssText: "border-radius:12px;padding:12px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.5)",
 };
 
-function richTooltip(d: Deployer): string {
-  const avatar = d.avatarUrl
-    ? `<img src="${d.avatarUrl}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />`
+function richTooltip(d: CreatorAggregate): string {
+  const avatar = d.avatar_url
+    ? `<img src="${d.avatar_url}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />`
     : "";
   return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
-    <div style="margin-bottom:8px">${avatar}<strong style="font-size:14px;vertical-align:middle">${d.displayName}</strong></div>
-    <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(d.totalVolume)} SOL<br/>
-    <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(d.totalMarketCap)} SOL<br/>
-    <span style="color:#a1a1aa">Creator Fees:</span> ${fmtCompact(d.totalCreatorFees)} SOL<br/>
+    <div style="margin-bottom:8px">${avatar}<strong style="font-size:14px;vertical-align:middle">${d.creator_display_name}</strong></div>
+    <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(d.volume)} SOL<br/>
+    <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(d.usd_market_cap)} SOL<br/>
+    <span style="color:#a1a1aa">Creator Fees:</span> ${fmtCompact(d.creator_fees)} SOL<br/>
     <span style="color:#a1a1aa">Mindshare:</span> ${d.mindshare}<br/>
-    <span style="color:#a1a1aa">Tokens:</span> ${d.tokenCount}
+    <span style="color:#a1a1aa">Tokens:</span> ${d.token_count}
   </div>`;
 }
 
-function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: () => void): EChartsOption {
+function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, onBack: () => void): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
-  const tokens = deployer.topTokens;
-  const maxMcap = Math.max(...tokens.map((t) => t.marketCap), 1);
+  const tokens = deployer.top_tokens;
+  const maxMcap = Math.max(...tokens.map((t) => t.usd_market_cap), 1);
 
   const socials: { label: string; url: string }[] = [];
-  socials.push({ label: "pump.fun", url: `https://pump.fun/profile/${deployer.address}` });
-  socials.push({ label: "Solscan", url: `https://solscan.io/account/${deployer.address}` });
-  if (deployer.twitterUrl) socials.push({ label: "X / Twitter", url: deployer.twitterUrl });
-  if (deployer.telegramUrl) socials.push({ label: "Telegram", url: deployer.telegramUrl });
-  if (deployer.websiteUrl) socials.push({ label: "Website", url: deployer.websiteUrl });
+  socials.push({ label: "pump.fun", url: `https://pump.fun/profile/${deployer.creator}` });
+  socials.push({ label: "Solscan", url: `https://solscan.io/account/${deployer.creator}` });
+  if (deployer.twitter_url) socials.push({ label: "X / Twitter", url: deployer.twitter_url });
+  if (deployer.telegram_url) socials.push({ label: "Telegram", url: deployer.telegram_url });
+  if (deployer.website_url) socials.push({ label: "Website", url: deployer.website_url });
 
-  const truncAddr = `${deployer.address.slice(0, 6)}...${deployer.address.slice(-4)}`;
+  const truncAddr = `${deployer.creator.slice(0, 6)}...${deployer.creator.slice(-4)}`;
 
   const metrics: { label: string; value: string }[] = [
-    { label: "Volume", value: `${fmtCompact(deployer.totalVolume)} SOL` },
-    { label: "Market Cap", value: `${fmtCompact(deployer.totalMarketCap)} SOL` },
-    { label: "Creator Fees", value: `${fmtCompact(deployer.totalCreatorFees)} SOL` },
+    { label: "Volume", value: `${fmtCompact(deployer.volume)} SOL` },
+    { label: "Market Cap", value: `${fmtCompact(deployer.usd_market_cap)} SOL` },
+    { label: "Creator Fees", value: `${fmtCompact(deployer.creator_fees)} SOL` },
     { label: "Mindshare", value: deployer.mindshare.toFixed(1) },
-    { label: "Tokens", value: deployer.tokenCount.toString() },
+    { label: "Tokens", value: deployer.token_count.toString() },
   ];
 
   const graphic: any[] = [];
@@ -109,22 +108,22 @@ function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: 
     z: 100,
   });
 
-  if (deployer.avatarUrl) {
+  if (deployer.avatar_url) {
     graphic.push({
       type: "image",
       left: 12,
       top: 38,
-      style: { image: deployer.avatarUrl, width: 44, height: 44 },
+      style: { image: deployer.avatar_url, width: 44, height: 44 },
       z: 100,
     });
   }
 
   graphic.push({
     type: "text",
-    left: deployer.avatarUrl ? 64 : 12,
+    left: deployer.avatar_url ? 64 : 12,
     top: 40,
     style: {
-      text: deployer.displayName,
+      text: deployer.creator_display_name,
       fill: "#fff",
       fontSize: 18,
       fontWeight: 700,
@@ -206,7 +205,7 @@ function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: 
         if (!t) return params.name || "";
         return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
           <strong style="font-size:14px">${t.name}</strong> <span style="color:#a1a1aa">${t.symbol}</span><br/>
-          <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.marketCap)} SOL<br/>
+          <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.usd_market_cap)} SOL<br/>
           <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(t.volume)} SOL
         </div>`;
       },
@@ -235,14 +234,14 @@ function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: 
       barMaxWidth: 50,
       data: tokens.map((t) => ({
         name: t.symbol,
-        value: t.marketCap,
+        value: t.usd_market_cap,
         token: t,
-        id: `${deployer.address}-${t.symbol}`,
-        groupId: deployer.address,
+        id: `${deployer.creator}-${t.symbol}`,
+        groupId: deployer.creator,
         itemStyle: {
           color,
           borderRadius: [4, 4, 0, 0],
-          opacity: 0.6 + 0.4 * (t.marketCap / maxMcap),
+          opacity: 0.6 + 0.4 * (t.usd_market_cap / maxMcap),
         },
       })),
       label: {
@@ -258,12 +257,12 @@ function buildDrilldownOption(deployer: Deployer, mindshareMax: number, onBack: 
 }
 
 /** Shared children data for Phase 1 and Phase 2 — same ids so ECharts animates between them seamlessly. */
-function expandChildren(deployer: Deployer, color: string) {
-  return deployer.topTokens.map((t) => ({
-    id: `${deployer.address}-${t.symbol}`,
-    groupId: deployer.address,
+function expandChildren(deployer: CreatorAggregate, color: string) {
+  return deployer.top_tokens.map((t) => ({
+    id: `${deployer.creator}-${t.symbol}`,
+    groupId: deployer.creator,
     name: t.symbol,
-    value: t.marketCap,
+    value: t.usd_market_cap,
     itemStyle: { color, borderRadius: 0 },
   }));
 }
@@ -271,7 +270,7 @@ function expandChildren(deployer: Deployer, color: string) {
 /** Phase 1: clicked deployer rectangle expands to fill the entire canvas (1:1 morph).
  *  Uses deployer color as backgroundColor (same as Phase 2) to prevent blink.
  *  A dark graphic rect behind the treemap simulates the dark background during expansion. */
-function buildExpandOption(deployer: Deployer, mindshareMax: number): EChartsOption {
+function buildExpandOption(deployer: CreatorAggregate, mindshareMax: number): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
   return {
     animation: true,
@@ -304,8 +303,8 @@ function buildExpandOption(deployer: Deployer, mindshareMax: number): EChartsOpt
       itemStyle: { borderColor: "#060608", borderWidth: 4, gapWidth: 4 },
       label: { show: false },
       data: [{
-        id: deployer.address,
-        name: deployer.displayName,
+        id: deployer.creator,
+        name: deployer.creator_display_name,
         value: 1,
         itemStyle: { color, borderRadius: 0 },
       }] as any,
@@ -314,7 +313,7 @@ function buildExpandOption(deployer: Deployer, mindshareMax: number): EChartsOpt
 }
 
 /** Phase 2: same children, now with gaps and borders — they visually split apart from the solid block. */
-function buildSplitOption(deployer: Deployer, mindshareMax: number): EChartsOption {
+function buildSplitOption(deployer: CreatorAggregate, mindshareMax: number): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
   return {
     animation: true,
@@ -354,9 +353,21 @@ function buildSplitOption(deployer: Deployer, mindshareMax: number): EChartsOpti
   };
 }
 
-function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number): EChartsOption {
+function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[]): EChartsOption {
   const unit = METRIC_UNITS[metric];
-  const sorted = [...DEPLOYERS].sort((a, b) => b[metric] - a[metric]);
+  
+  // Map MetricKey properly since properties were renamed
+  const getMetricValue = (d: CreatorAggregate) => {
+    switch (metric) {
+      case "totalVolume": return d.volume;
+      case "totalMarketCap": return d.usd_market_cap;
+      case "totalCreatorFees": return d.creator_fees;
+      case "mindshare": return d.mindshare;
+      default: return 0;
+    }
+  };
+
+  const sorted = [...deployers].sort((a, b) => getMetricValue(b) - getMetricValue(a));
   const top15 = sorted.slice(0, 15);
   const colors = sorted.map((d) => deployerColor(d, mindshareMax));
   const top15Colors = top15.map((d) => deployerColor(d, mindshareMax));
@@ -364,10 +375,10 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
   const commonTooltip = {
     ...TOOLTIP_BASE,
     formatter: (params: any) => {
-      const d = (params.data?.deployer ?? params.data?.source) as Deployer | undefined;
+      const d = (params.data?.deployer ?? params.data?.source) as CreatorAggregate | undefined;
       if (d) return richTooltip(d);
       if (params.name) {
-        const found = DEPLOYERS.find((dd) => dd.displayName === params.name);
+        const found = deployers.find((dd) => dd.creator_display_name === params.name);
         if (found) return richTooltip(found);
       }
       return "";
@@ -390,13 +401,13 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
         tooltip: {
           ...TOOLTIP_BASE,
           formatter: (params: any) => {
-            const d = params.data?.deployer as Deployer | undefined;
+            const d = params.data?.deployer as CreatorAggregate | undefined;
             if (d) return richTooltip(d);
             const t = params.data?.token;
             if (t) {
               return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
                 <strong style="font-size:14px">${t.name}</strong> <span style="color:#a1a1aa">${t.symbol}</span><br/>
-                <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.marketCap)} SOL<br/>
+                <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.usd_market_cap)} SOL<br/>
                 <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(t.volume)} SOL
               </div>`;
             }
@@ -424,7 +435,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
               mcap: { fontSize: 11, color: "rgba(255,255,255,0.6)", lineHeight: 16, fontFamily: "'JetBrains Mono', monospace" },
               vol: { fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 14, fontFamily: "'JetBrains Mono', monospace" },
             };
-            DEPLOYERS.forEach((d, i) => {
+            deployers.forEach((d, i) => {
               const url = d.avatarUrl || "";
               rich[`av${i}`] = url
                 ? { width: 22, height: 22, borderRadius: 11, backgroundColor: { image: url } as any }
@@ -434,25 +445,25 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
               show: true,
               position: "insideTopLeft" as any,
               formatter: (p: any) => {
-                const d = p.data?.deployer as Deployer | undefined;
+                const d = p.data?.deployer as CreatorAggregate | undefined;
                 const idx = p.data?.deployerIndex as number | undefined;
                 if (d != null && typeof idx === "number") {
-                  return `{av${idx}| }  {name|${d.displayName}}\n{val|${fmtCompact(d[metric])}${unit ? " " + unit : ""}}  ·  {tokens|${d.tokenCount} tokens}`;
+                  return `{av${idx}| }  {name|${d.creator_display_name}}\n{val|${fmtCompact(d[metric as keyof CreatorAggregate] as number)}${unit ? " " + unit : ""}}  ·  {tokens|${d.token_count} tokens}`;
                 }
                 const t = p.data?.token;
-                if (t) return `{sym|${t.symbol}}\n{mcap|${fmtCompact(t.marketCap)} SOL}\n{vol|Vol: ${fmtCompact(t.volume)} SOL}`;
+                if (t) return `{sym|${t.symbol}}\n{mcap|${fmtCompact(t.usd_market_cap)} SOL}\n{vol|Vol: ${fmtCompact(t.volume)} SOL}`;
                 return p.name || "";
               },
               rich,
               padding: [6, 8],
             };
           })(),
-          data: DEPLOYERS.map((d, deployerIndex) => {
+          data: deployers.map((d, deployerIndex) => {
             const baseColor = deployerColor(d, mindshareMax);
             return {
-              id: d.address,
-              name: d.displayName,
-              value: d[metric],
+              id: d.creator,
+              name: d.creator_display_name,
+              value: getMetricValue(d),
               deployer: d,
               deployerIndex,
               itemStyle: { color: baseColor, borderRadius: 6 },
@@ -465,11 +476,11 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
       return {
         tooltip: commonTooltip,
         grid: { left: 60, right: 20, top: 20, bottom: 60 },
-        xAxis: { type: "category" as const, data: top15.map((d) => d.displayName), axisLabel: { ...axisStyle.axisLabel, rotate: 35 }, axisLine: axisStyle.axisLine },
+        xAxis: { type: "category" as const, data: top15.map((d) => d.creator_display_name), axisLabel: { ...axisStyle.axisLabel, rotate: 35 }, axisLine: axisStyle.axisLine },
         yAxis: { type: "value" as const, ...axisStyle },
         series: [{
           type: "bar",
-          data: top15.map((d, i) => ({ value: d[metric], deployer: d, itemStyle: { color: top15Colors[i], borderRadius: [4, 4, 0, 0] } })),
+          data: top15.map((d, i) => ({ value: getMetricValue(d), deployer: d, itemStyle: { color: top15Colors[i], borderRadius: [4, 4, 0, 0] } })),
           barMaxWidth: 40,
         }],
       };
@@ -478,11 +489,11 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
       return {
         tooltip: commonTooltip,
         grid: { left: 120, right: 30, top: 10, bottom: 20 },
-        yAxis: { type: "category" as const, data: top15.map((d) => d.displayName).reverse(), axisLabel: axisStyle.axisLabel, axisLine: axisStyle.axisLine },
+        yAxis: { type: "category" as const, data: top15.map((d) => d.creator_display_name).reverse(), axisLabel: axisStyle.axisLabel, axisLine: axisStyle.axisLine },
         xAxis: { type: "value" as const, ...axisStyle },
         series: [{
           type: "bar",
-          data: [...top15].reverse().map((d, i) => ({ value: d[metric], deployer: d, itemStyle: { color: top15Colors[top15.length - 1 - i], borderRadius: [0, 4, 4, 0] } })),
+          data: [...top15].reverse().map((d, i) => ({ value: getMetricValue(d), deployer: d, itemStyle: { color: top15Colors[top15.length - 1 - i], borderRadius: [0, 4, 4, 0] } })),
           barMaxWidth: 28,
         }],
       };
@@ -497,8 +508,8 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           label: { color: "#d4d4d8", fontSize: 11, fontFamily: "'DM Sans', sans-serif" },
           itemStyle: { borderColor: "#060608", borderWidth: 2 },
           data: top15.map((d, i) => ({
-            name: d.displayName,
-            value: d[metric],
+            name: d.creator_display_name,
+            value: getMetricValue(d),
             deployer: d,
             itemStyle: { color: top15Colors[i] },
           })),
@@ -510,7 +521,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
         tooltip: {
           ...TOOLTIP_BASE,
           formatter: (params: any) => {
-            const d = params.data?.[3] as Deployer | undefined;
+            const d = params.data?.[3] as CreatorAggregate | undefined;
             return d ? richTooltip(d) : "";
           },
         },
@@ -520,21 +531,21 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
         series: [{
           type: "scatter",
           symbolSize: (data: any) => Math.max(8, Math.sqrt(data[2]) * 1.5),
-          data: DEPLOYERS.map((d) => [d.totalVolume, d.totalMarketCap, d.totalCreatorFees, d]),
-          itemStyle: { color: (params: any) => { const dd = params.data?.[3] as Deployer; return dd ? deployerColor(dd, mindshareMax) : "#ef4444"; } },
+          data: deployers.map((d) => [d.volume, d.usd_market_cap, d.creator_fees, d]) as any,
+          itemStyle: { color: (params: any) => { const dd = params.data?.[3] as CreatorAggregate; return dd ? deployerColor(dd, mindshareMax) : "#ef4444"; } },
         }],
       };
 
     case "radar": {
       const radarTop = top15.slice(0, 8);
-      const maxVol = Math.max(...radarTop.map((d) => d.totalVolume));
-      const maxMcap = Math.max(...radarTop.map((d) => d.totalMarketCap));
-      const maxFees = Math.max(...radarTop.map((d) => d.totalCreatorFees));
-      const maxTokens = Math.max(...radarTop.map((d) => d.tokenCount));
+      const maxVol = Math.max(...radarTop.map((d) => d.volume));
+      const maxMcap = Math.max(...radarTop.map((d) => d.usd_market_cap));
+      const maxFees = Math.max(...radarTop.map((d) => d.creator_fees));
+      const maxTokens = Math.max(...radarTop.map((d) => d.token_count));
       const maxMs = Math.max(...radarTop.map((d) => d.mindshare));
       return {
         tooltip: commonTooltip,
-        legend: { data: radarTop.map((d) => d.displayName), bottom: 0, textStyle: { color: "#71717a", fontSize: 10 } },
+        legend: { data: radarTop.map((d) => d.creator_display_name), bottom: 0, textStyle: { color: "#71717a", fontSize: 10 } },
         radar: {
           indicator: [
             { name: "Volume", max: maxVol },
@@ -551,8 +562,8 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
         series: [{
           type: "radar",
           data: radarTop.map((d, i) => ({
-            name: d.displayName,
-            value: [d.totalVolume, d.totalMarketCap, d.totalCreatorFees, d.tokenCount, d.mindshare],
+            name: d.creator_display_name,
+            value: [d.volume, d.usd_market_cap, d.creator_fees, d.token_count, d.mindshare],
             deployer: d,
             lineStyle: { color: deployerColor(d, mindshareMax) },
             itemStyle: { color: deployerColor(d, mindshareMax) },
@@ -571,13 +582,13 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           label: { color: "#fff", fontSize: 10, fontFamily: "'DM Sans', sans-serif", rotate: 0 },
           itemStyle: { borderColor: "#060608", borderWidth: 2 },
           data: top15.map((d, i) => ({
-            name: d.displayName,
-            value: d[metric],
+            name: d.creator_display_name,
+            value: getMetricValue(d),
             deployer: d,
             itemStyle: { color: top15Colors[i] },
-            children: d.topTokens.map((t) => ({
+            children: d.top_tokens.map((t) => ({
               name: t.symbol,
-              value: t.marketCap,
+              value: t.usd_market_cap,
               itemStyle: { color: top15Colors[i], opacity: 0.7 },
             })),
           })),
@@ -597,8 +608,8 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           label: { show: true, position: "inside" as const, color: "#fff", fontSize: 12, fontFamily: "'DM Sans', sans-serif" },
           itemStyle: { borderColor: "#060608", borderWidth: 1 },
           data: top15.slice(0, 10).map((d, i) => ({
-            name: d.displayName,
-            value: d[metric],
+            name: d.creator_display_name,
+            value: getMetricValue(d),
             deployer: d,
             itemStyle: { color: top15Colors[i] },
           })),
@@ -618,7 +629,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           symbolSize: 10,
           lineStyle: { color: "#ef4444", width: 2 },
           areaStyle: { color: { type: "linear" as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(239,68,68,0.25)" }, { offset: 1, color: "rgba(239,68,68,0)" }] } },
-          data: top15.map((d, i) => ({ value: d[metric], deployer: d, itemStyle: { color: top15Colors[i] } })),
+          data: top15.map((d, i) => ({ value: getMetricValue(d), deployer: d, itemStyle: { color: top15Colors[i] } })),
         }],
       };
 
@@ -680,7 +691,7 @@ const ECHARTS_MODULES: Record<ChartType, () => Promise<any[]>> = {
   },
 };
 
-function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: Deployer) => void }) {
+function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -716,8 +727,8 @@ function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOp
     if (!instanceRef.current) {
       instanceRef.current = echartsRef.current.init(containerRef.current, undefined, { renderer: "canvas" });
       instanceRef.current.on("click", (params: any) => {
-        const d = (params.data?.deployer ?? params.data?.source ?? params.data?.[3]) as Deployer | undefined;
-        if (d && typeof d === "object" && "address" in d) onChartClickRef.current?.(d);
+        const d = (params.data?.deployer ?? params.data?.source ?? params.data?.[3]) as CreatorAggregate | undefined;
+        if (d && typeof d === "object" && "creator" in d) onChartClickRef.current?.(d);
       });
     }
 
@@ -752,22 +763,85 @@ function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOp
 }
 
 export default function AnalyticsDashboard() {
+  const [deployers, setDeployers] = useState<CreatorAggregate[]>([]);
+  const [loading, setLoading] = useState(true);
   const [metric, setMetric] = useState<MetricKey>("mindshare");
   const [chartType, setChartType] = useState<ChartType>("treemap");
-  const [selected, setSelected] = useState<Deployer | null>(null);
-  const [expandingDeployer, setExpandingDeployer] = useState<Deployer | null>(null);
-  const [splittingDeployer, setSplittingDeployer] = useState<Deployer | null>(null);
-  const [expandedDeployer, setExpandedDeployer] = useState<Deployer | null>(null);
+  const [selected, setSelected] = useState<CreatorAggregate | null>(null);
+  const [expandingDeployer, setExpandingDeployer] = useState<CreatorAggregate | null>(null);
+  const [splittingDeployer, setSplittingDeployer] = useState<CreatorAggregate | null>(null);
+  const [expandedDeployer, setExpandedDeployer] = useState<CreatorAggregate | null>(null);
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const totals = useMemo(() => ({
-    deployers: DEPLOYERS.length,
-    volume: DEPLOYERS.reduce((s, d) => s + d.totalVolume, 0),
-    marketCap: DEPLOYERS.reduce((s, d) => s + d.totalMarketCap, 0),
-    fees: DEPLOYERS.reduce((s, d) => s + d.totalCreatorFees, 0),
-  }), []);
+  useEffect(() => {
+    async function fetchDeployers() {
+      try {
+        const res = await fetch("/api/pumpfun/recommended");
+        const json = await res.json();
+        
+        if (!json.success || !json.data) throw new Error("Failed to fetch PumpFun coins");
+        const coins = json.data;
+        
+        // Aggregate coins by creator
+        const creatorMap = new Map<string, CreatorAggregate>();
+        
+        coins.forEach((coin: any) => {
+          const c = coin.creator;
+          if (!c || c === '11111111111111111111111111111111') return;
+          
+          if (!creatorMap.has(c)) {
+            creatorMap.set(c, {
+              creator: c,
+              creator_display_name: `${c.slice(0, 4)}...${c.slice(-4)}`,
+              token_count: 0,
+              volume: 0,
+              usd_market_cap: 0,
+              creator_fees: 0,
+              mindshare: 0,
+              top_tokens: [],
+            });
+          }
+          
+          const deployer = creatorMap.get(c)!;
+          deployer.token_count += 1;
+          deployer.usd_market_cap += (coin.usd_market_cap || 0);
+          
+          deployer.top_tokens.push({
+            name: coin.name || "Unknown",
+            symbol: coin.symbol || "UNK",
+            usd_market_cap: coin.usd_market_cap || 0,
+            volume: 0, // Fallback as volume not natively in route
+          });
+        });
+        
+        const aggregated = Array.from(creatorMap.values()).map(d => {
+          // Compute derived values
+          d.mindshare = d.usd_market_cap / 1000;
+          d.top_tokens = d.top_tokens.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 5);
+          return d;
+        });
+        
+        // Top 30 Deployers
+        const sorted = aggregated.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 30);
+        
+        setDeployers(sorted);
+      } catch (err) {
+        console.error("Failed to fetch deployers:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDeployers();
+  }, []);
 
-  const mindshareMax = useMemo(() => Math.max(...DEPLOYERS.map((d) => d.mindshare), 1), []);
+  const totals = useMemo(() => ({
+    deployers: deployers.length,
+    volume: deployers.reduce((s, d) => s + d.totalVolume, 0),
+    marketCap: deployers.reduce((s, d) => s + d.totalMarketCap, 0),
+    fees: deployers.reduce((s, d) => s + d.totalCreatorFees, 0),
+  }), [deployers]);
+
+  const mindshareMax = useMemo(() => Math.max(1, ...deployers.map((d) => d.mindshare)), [deployers]);
 
   const clearPhaseTimeout = useCallback(() => {
     if (phaseTimeoutRef.current) {
@@ -784,6 +858,7 @@ export default function AnalyticsDashboard() {
   }, [clearPhaseTimeout]);
 
   const option = useMemo(() => {
+    if (deployers.length === 0) return {};
     if (chartType === "treemap" && expandingDeployer) {
       return buildExpandOption(expandingDeployer, mindshareMax);
     }
@@ -793,8 +868,8 @@ export default function AnalyticsDashboard() {
     if (chartType === "treemap" && expandedDeployer) {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
     }
-    return buildOption(chartType, metric, mindshareMax);
-  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack]);
+    return buildOption(chartType, metric, mindshareMax, deployers);
+  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers]);
 
   useEffect(() => {
     if (!expandingDeployer) return;
@@ -816,7 +891,7 @@ export default function AnalyticsDashboard() {
     return () => clearPhaseTimeout();
   }, [splittingDeployer, clearPhaseTimeout]);
 
-  const handleChartClick = useCallback((d: Deployer) => {
+  const handleChartClick = useCallback((d: CreatorAggregate) => {
     if (chartType === "treemap") {
       clearPhaseTimeout();
       setExpandedDeployer(null);
@@ -833,6 +908,10 @@ export default function AnalyticsDashboard() {
     { label: "Total Market Cap", value: fmtCompact(totals.marketCap), unit: "SOL" },
     { label: "Creator Fees", value: fmtCompact(totals.fees), unit: "SOL" },
   ];
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-full text-zinc-600 bg-[#060608]">Loading deployers...</div>;
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#060608] text-white overflow-y-auto overflow-x-hidden">

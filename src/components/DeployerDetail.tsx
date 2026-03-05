@@ -3,10 +3,11 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ExternalLink } from "lucide-react";
-import type { Deployer, MetricKey, METRIC_LABELS as ML } from "@/lib/dummyData";
+import type { MetricKey, METRIC_LABELS as ML } from "@/lib/dummyData";
+import { type CreatorAggregate } from "@/types/pumpfun";
 
 interface Props {
-  deployer: Deployer | null;
+  deployer: CreatorAggregate | null;
   metricLabels: typeof ML;
   onClose: () => void;
 }
@@ -48,11 +49,11 @@ export default function DeployerDetail({ deployer, metricLabels, onClose }: Prop
               </div>
 
               <div className="mb-6">
-                <p className="text-sm font-semibold text-white mb-1">{deployer.displayName}</p>
+                <p className="text-sm font-semibold text-white mb-1">{deployer.creator_display_name}</p>
                 <div className="flex items-center gap-2">
-                  <code className="text-[11px] text-zinc-500 font-mono break-all">{deployer.address}</code>
+                  <code className="text-[11px] text-zinc-500 font-mono break-all">{deployer.creator}</code>
                   <a
-                    href={`https://solscan.io/account/${deployer.address}`}
+                    href={`https://solscan.io/account/${deployer.creator}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 text-zinc-500 hover:text-red-400 transition-colors"
@@ -69,29 +70,37 @@ export default function DeployerDetail({ deployer, metricLabels, onClose }: Prop
                   ["totalMarketCap", "SOL"],
                   ["totalCreatorFees", "SOL"],
                   ["mindshare", ""],
-                ] as [MetricKey, string][]).map(([key, unit]) => (
-                  <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
-                    <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{metricLabels[key]}</p>
-                    <p className="text-sm font-bold text-white">{fmt(deployer[key], unit)}</p>
-                  </div>
-                ))}
+                ] as [MetricKey, string][]).map(([key, unit]) => {
+                  let value = 0;
+                  if (key === "totalVolume") value = deployer.volume;
+                  if (key === "totalMarketCap") value = deployer.usd_market_cap;
+                  if (key === "totalCreatorFees") value = deployer.creator_fees;
+                  if (key === "mindshare") value = deployer.mindshare;
+
+                  return (
+                    <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
+                      <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{metricLabels[key]}</p>
+                      <p className="text-sm font-bold text-white">{fmt(value, unit)}</p>
+                    </div>
+                  );
+                })}
                 <div className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
                   <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Tokens Deployed</p>
-                  <p className="text-sm font-bold text-white">{deployer.tokenCount}</p>
+                  <p className="text-sm font-bold text-white">{deployer.token_count}</p>
                 </div>
               </div>
 
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Top Tokens</h3>
                 <div className="space-y-2">
-                  {deployer.topTokens.map((t) => (
+                  {deployer.top_tokens.map((t) => (
                     <div key={t.symbol} className="flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3">
                       <div>
                         <p className="text-sm font-semibold text-white">{t.name}</p>
                         <p className="text-[11px] text-zinc-500">${t.symbol}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-white">{fmt(t.marketCap, "SOL")}</p>
+                        <p className="text-xs text-white">{fmt(t.usd_market_cap, "SOL")}</p>
                         <p className="text-[10px] text-zinc-500">Vol: {fmt(t.volume, "SOL")}</p>
                       </div>
                     </div>
