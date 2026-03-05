@@ -66,3 +66,38 @@ export interface CreatorAggregate {
   mindshare: number;
   top_tokens: CreatorAggregateToken[];
 }
+
+export interface PumpFunFollower {
+  username?: string | null;
+  profile_image?: string | null;
+  address: string;
+  timestamp: number;
+  followers?: number | null;
+}
+
+export interface PumpFunBalanceSummary {
+  total_value: number;
+  native_balance: number;
+  native_lamports: number;
+  sol_price: number;
+  token_count: number;
+  last_update_ts: number;
+  portfolioPnL?: number | null;
+}
+
+export interface PumpFunBalanceToken {
+  mint: string;
+  amount: number;
+  usd_value: number;
+  symbol?: string;
+  name?: string;
+  image_uri?: string;
+}
+
+export interface DeployerAnalytics {
+  followers: PumpFunFollower[];
+  following: PumpFunFollower[];
+  balanceSummary: PumpFunBalanceSummary | null;
+  balances: PumpFunBalanceToken[];
+  createdCoins: PumpFunCoin[];
+}
