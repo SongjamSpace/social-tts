@@ -50,6 +50,14 @@ export interface CreatorAggregateToken {
   symbol: string;
   usd_market_cap: number;
   volume: number;
+  mint?: string;
+  description?: string;
+  image_uri?: string;
+  twitter?: string;
+  created_timestamp?: number;
+  last_trade_timestamp?: number;
+  complete?: boolean;
+  ath_market_cap?: number;
 }
 
 export interface CreatorAggregate {
@@ -60,11 +68,25 @@ export interface CreatorAggregate {
   telegram_url?: string;
   website_url?: string;
   token_count: number;
+  /** Number of tokens with complete === true (bonded) */
+  bonded: number;
   volume: number;
   usd_market_cap: number;
+  total_ath_market_cap: number;
   creator_fees: number;
   mindshare: number;
   top_tokens: CreatorAggregateToken[];
+  /** All tokens where complete === true (bonded/migrated) */
+  bonded_tokens: CreatorAggregateToken[];
+  /** pump.fun profile fields */
+  username?: string;
+  profile_image?: string;
+  followers_count?: number;
+  following_count?: number;
+  likes_received?: number;
+  mentions_received?: number;
+  bio?: string;
+  x_username?: string;
 }
 
 export interface PumpFunFollower {

@@ -2,41 +2,204 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, PieChart, ScatterChart, Activity, Target, Layers, Rows3, Circle } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, SlidersHorizontal, X } from "lucide-react";
 import type { EChartsOption } from "echarts";
 import {
   METRIC_LABELS,
   METRIC_UNITS,
   type MetricKey
 } from "@/lib/dummyData";
-import { type CreatorAggregate, type PumpFunCoin, type CreatorAggregateToken } from "@/types/pumpfun";
+import { type CreatorAggregate, type CreatorAggregateToken, type PumpFunCoin } from "@/types/pumpfun";
 import DeployerDetail from "./DeployerDetail";
 
 type ChartType = "treemap" | "bar" | "barH" | "pie" | "scatter" | "radar" | "sunburst" | "funnel" | "packed" | "line" | "heatmap";
 
 const CHART_TYPES: { key: ChartType; label: string; icon: React.ReactNode }[] = [
   { key: "treemap", label: "Treemap", icon: <Grid3X3 className="w-3.5 h-3.5" /> },
-  { key: "bar", label: "Bar", icon: <BarChart3 className="w-3.5 h-3.5" /> },
-  { key: "barH", label: "Horizontal Bar", icon: <Rows3 className="w-3.5 h-3.5" /> },
-  { key: "pie", label: "Pie / Donut", icon: <PieChart className="w-3.5 h-3.5" /> },
-  { key: "scatter", label: "Scatter", icon: <ScatterChart className="w-3.5 h-3.5" /> },
-  { key: "radar", label: "Radar", icon: <Target className="w-3.5 h-3.5" /> },
-  { key: "sunburst", label: "Sunburst", icon: <Circle className="w-3.5 h-3.5" /> },
-  { key: "funnel", label: "Funnel", icon: <Layers className="w-3.5 h-3.5" /> },
-  { key: "line", label: "Ranking Line", icon: <Activity className="w-3.5 h-3.5" /> },
 ];
 
 const METRICS: { key: MetricKey; icon: React.ReactNode }[] = [
   { key: "totalVolume", icon: <BarChart3 className="w-3.5 h-3.5" /> },
   { key: "totalMarketCap", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { key: "totalAthMarketCap", icon: <Trophy className="w-3.5 h-3.5" /> },
+  { key: "bonded", icon: <Link className="w-3.5 h-3.5" /> },
+  { key: "bondRate", icon: <Percent className="w-3.5 h-3.5" /> },
+  { key: "athEfficiency", icon: <Zap className="w-3.5 h-3.5" /> },
+  { key: "followers", icon: <Users className="w-3.5 h-3.5" /> },
   { key: "totalCreatorFees", icon: <DollarSign className="w-3.5 h-3.5" /> },
   { key: "mindshare", icon: <Brain className="w-3.5 h-3.5" /> },
 ];
 
-function fmtCompact(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
-  return v.toLocaleString();
+/** Metrics not yet available — shown as disabled with "Coming soon" tooltip */
+const DISABLED_METRICS: Set<MetricKey> = new Set(["totalVolume", "totalCreatorFees", "mindshare"]);
+
+/** Pump.fun creator avatar: IPFS gateway + creator address */
+const PUMP_AVATAR_BASE = "https://pump.mypinata.cloud/ipfs/";
+/** Fallback when creator avatar cannot be retrieved */
+const PUMP_AVATAR_FALLBACK = "https://pump.mypinata.cloud/ipfs/QmeSzchzEPqCU1jwTnsipwcBAeH7S4bmVvFGfF65iA1BY1";
+
+interface CoinFilters {
+  athMarketCapMin: number | null;
+  athMarketCapMax: number | null;
+  marketCapMin: number | null;
+  marketCapMax: number | null;
+  bondedOnly: boolean;
+  notBondedOnly: boolean;
+  createdAfter: string;
+  lastTradedAfter: string;
+  minReplyCount: number | null;
+  excludeNsfw: boolean;
+  excludeBanned: boolean;
+  minRealSolReserves: number | null;
+  minLiquidityRatio: number | null;
+  minTokenCount: number | null;
+  maxTokenCount: number | null;
+  minBondRate: number | null;
+  hasPfpOnly: boolean;
+  minFollowers: number | null;
+}
+
+const DEFAULT_FILTERS: CoinFilters = {
+  athMarketCapMin: null,
+  athMarketCapMax: null,
+  marketCapMin: null,
+  marketCapMax: null,
+  bondedOnly: false,
+  notBondedOnly: false,
+  createdAfter: "",
+  lastTradedAfter: "",
+  minReplyCount: null,
+  excludeNsfw: false,
+  excludeBanned: false,
+  minRealSolReserves: null,
+  minLiquidityRatio: null,
+  minTokenCount: null,
+  maxTokenCount: null,
+  minBondRate: null,
+  hasPfpOnly: false,
+  minFollowers: null,
+};
+
+function countActiveFilters(f: CoinFilters): number {
+  let n = 0;
+  if (f.athMarketCapMin != null) n++;
+  if (f.athMarketCapMax != null) n++;
+  if (f.marketCapMin != null) n++;
+  if (f.marketCapMax != null) n++;
+  if (f.bondedOnly) n++;
+  if (f.notBondedOnly) n++;
+  if (f.createdAfter) n++;
+  if (f.lastTradedAfter) n++;
+  if (f.minReplyCount != null) n++;
+  if (f.excludeNsfw) n++;
+  if (f.excludeBanned) n++;
+  if (f.minRealSolReserves != null) n++;
+  if (f.minLiquidityRatio != null) n++;
+  if (f.minTokenCount != null) n++;
+  if (f.maxTokenCount != null) n++;
+  if (f.minBondRate != null) n++;
+  if (f.hasPfpOnly) n++;
+  if (f.minFollowers != null) n++;
+  return n;
+}
+
+function passesCoinFilter(coin: any, f: CoinFilters): boolean {
+  const ath = coin.ath_market_cap || 0;
+  const mcap = coin.usd_market_cap || 0;
+  if (f.athMarketCapMin != null && ath < f.athMarketCapMin) return false;
+  if (f.athMarketCapMax != null && ath > f.athMarketCapMax) return false;
+  if (f.marketCapMin != null && mcap < f.marketCapMin) return false;
+  if (f.marketCapMax != null && mcap > f.marketCapMax) return false;
+  if (f.bondedOnly && coin.complete !== true) return false;
+  if (f.notBondedOnly && coin.complete === true) return false;
+  if (f.createdAfter) {
+    const raw = coin.created_timestamp || 0;
+    const tsMs = raw > 1e12 ? raw : raw * 1000;
+    if (tsMs < new Date(f.createdAfter).getTime()) return false;
+  }
+  if (f.lastTradedAfter) {
+    const raw = coin.last_trade_timestamp || 0;
+    const tsMs = raw > 1e12 ? raw : raw * 1000;
+    if (tsMs < new Date(f.lastTradedAfter).getTime()) return false;
+  }
+  if (f.minReplyCount != null && (coin.reply_count || 0) < f.minReplyCount) return false;
+  if (f.excludeNsfw && coin.nsfw === true) return false;
+  if (f.excludeBanned && coin.is_banned === true) return false;
+  if (f.minRealSolReserves != null && (coin.real_sol_reserves || 0) < f.minRealSolReserves) return false;
+  if (f.minLiquidityRatio != null) {
+    const virt = coin.virtual_sol_reserves || 0;
+    const ratio = virt > 0 ? (coin.real_sol_reserves || 0) / virt : 0;
+    if (ratio < f.minLiquidityRatio) return false;
+  }
+  return true;
+}
+
+function passesCreatorFilter(d: CreatorAggregate, f: CoinFilters): boolean {
+  if (f.minTokenCount != null && d.token_count < f.minTokenCount) return false;
+  if (f.maxTokenCount != null && d.token_count > f.maxTokenCount) return false;
+  if (f.minBondRate != null) {
+    const rate = d.token_count > 0 ? (d.bonded / d.token_count) * 100 : 0;
+    if (rate < f.minBondRate) return false;
+  }
+  if (f.hasPfpOnly && (!d.profile_image || d.profile_image === PUMP_AVATAR_FALLBACK)) return false;
+  if (f.minFollowers != null && (d.followers_count ?? 0) < f.minFollowers) return false;
+  return true;
+}
+
+function pumpAvatarUrl(creatorAddress: string): string {
+  return `${PUMP_AVATAR_BASE}${creatorAddress}`;
+}
+
+const circleAvatarCache = new Map<string, string>();
+
+function circleAvatarDataUri(url: string, size: number): Promise<string> {
+  const key = `${url}:${size}`;
+  if (circleAvatarCache.has(key)) return Promise.resolve(circleAvatarCache.get(key)!);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d")!;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, size, size);
+      const dataUri = canvas.toDataURL("image/png");
+      circleAvatarCache.set(key, dataUri);
+      resolve(dataUri);
+    };
+    img.onerror = () => {
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d")!;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, size, size);
+        const dataUri = canvas.toDataURL("image/png");
+        circleAvatarCache.set(key, dataUri);
+        resolve(dataUri);
+      };
+      img.onerror = () => resolve("");
+      img.src = PUMP_AVATAR_FALLBACK;
+    };
+    img.src = url;
+  });
+}
+
+function fmtCompact(v: number | undefined | null): string {
+  const n = v == null || Number.isNaN(v) ? 0 : Number(v);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
 function deployerColor(d: CreatorAggregate, maxMs: number): string {
@@ -55,39 +218,89 @@ const TOOLTIP_BASE = {
 };
 
 function richTooltip(d: CreatorAggregate): string {
-  const avatar = d.avatar_url
-    ? `<img src="${d.avatar_url}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />`
-    : "";
+  const avatarUrl = d.avatar_url || PUMP_AVATAR_FALLBACK;
+  const avatar = `<img src="${avatarUrl}" onerror="this.src='${PUMP_AVATAR_FALLBACK}'" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px" />`;
+  const xLine = d.x_username ? `<span style="color:#a1a1aa">X:</span> @${d.x_username}<br/>` : "";
+  const followLine = d.followers_count != null ? `<span style="color:#a1a1aa">Followers:</span> ${fmtCompact(d.followers_count)}<br/>` : "";
   return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
     <div style="margin-bottom:8px">${avatar}<strong style="font-size:14px;vertical-align:middle">${d.creator_display_name}</strong></div>
-    <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(d.volume)} SOL<br/>
-    <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(d.usd_market_cap)} SOL<br/>
-    <span style="color:#a1a1aa">Creator Fees:</span> ${fmtCompact(d.creator_fees)} SOL<br/>
-    <span style="color:#a1a1aa">Mindshare:</span> ${d.mindshare}<br/>
+    ${xLine}${followLine}<span style="color:#a1a1aa">Market Cap:</span> $${fmtCompact(d.usd_market_cap)}<br/>
+    <span style="color:#a1a1aa">ATH Market Cap:</span> $${fmtCompact(d.total_ath_market_cap)}<br/>
+    <span style="color:#a1a1aa">Bonded:</span> ${d.bonded}<br/>
     <span style="color:#a1a1aa">Tokens:</span> ${d.token_count}
   </div>`;
 }
 
+/**
+ * Generate a plausible dummy price curve anchored at currentMcap with a peak at athMcap.
+ * Used for the "Latest Token" mini sparkline until real historical data is available.
+ */
+function generateDummyPriceCurve(currentMcap: number, athMcap: number, days = 14): number[] {
+  const seed = Math.abs(Math.round(currentMcap * 7 + athMcap * 13)) % 1000;
+  const rng = (i: number) => {
+    const x = Math.sin(seed + i * 9301 + 49297) * 233280;
+    return x - Math.floor(x);
+  };
+  const athDay = Math.floor(days * 0.25 + rng(0) * days * 0.45);
+  const points: number[] = [];
+  for (let i = 0; i < days; i++) {
+    let base: number;
+    if (i <= athDay) {
+      const t = athDay > 0 ? i / athDay : 1;
+      base = currentMcap * 0.3 + (athMcap - currentMcap * 0.3) * t;
+    } else {
+      const t = (days - 1 - athDay) > 0 ? (i - athDay) / (days - 1 - athDay) : 1;
+      base = athMcap - (athMcap - currentMcap) * t;
+    }
+    points.push(Math.max(0, base * (0.92 + rng(i + 1) * 0.16)));
+  }
+  return points;
+}
+
+function formatRelativeTime(ts: number | undefined): string {
+  if (!ts) return "—";
+  const msTs = ts > 1e12 ? ts : ts * 1000;
+  const ms = Date.now() - msTs;
+  if (ms < 0) return "just now";
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
+function formatDate(ts: number | undefined): string {
+  if (!ts) return "—";
+  const msTs = ts > 1e12 ? ts : ts * 1000;
+  return new Date(msTs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, onBack: () => void): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
-  const tokens = deployer.top_tokens;
-  const maxMcap = Math.max(...tokens.map((t) => t.usd_market_cap), 1);
+  const tokens = drilldownTokens(deployer);
+  const tokenAth = (t: CreatorAggregateToken) => t.ath_market_cap || t.usd_market_cap || 0;
+  const maxVal = Math.max(...tokens.map(tokenAth), 1);
 
   const socials: { label: string; url: string }[] = [];
   socials.push({ label: "pump.fun", url: `https://pump.fun/profile/${deployer.creator}` });
   socials.push({ label: "Solscan", url: `https://solscan.io/account/${deployer.creator}` });
-  if (deployer.twitter_url) socials.push({ label: "X / Twitter", url: deployer.twitter_url });
+  if (deployer.x_username) socials.push({ label: `@${deployer.x_username}`, url: `https://x.com/${deployer.x_username}` });
+  else if (deployer.twitter_url) socials.push({ label: "X / Twitter", url: deployer.twitter_url });
   if (deployer.telegram_url) socials.push({ label: "Telegram", url: deployer.telegram_url });
   if (deployer.website_url) socials.push({ label: "Website", url: deployer.website_url });
 
-  const truncAddr = `${deployer.creator.slice(0, 6)}...${deployer.creator.slice(-4)}`;
-
   const metrics: { label: string; value: string }[] = [
-    { label: "Volume", value: `${fmtCompact(deployer.volume)} SOL` },
-    { label: "Market Cap", value: `${fmtCompact(deployer.usd_market_cap)} SOL` },
-    { label: "Creator Fees", value: `${fmtCompact(deployer.creator_fees)} SOL` },
-    { label: "Mindshare", value: deployer.mindshare.toFixed(1) },
+    { label: "ATH Mcap", value: `$${fmtCompact(deployer.total_ath_market_cap)}` },
+    { label: "Market Cap", value: `$${fmtCompact(deployer.usd_market_cap)}` },
+    { label: "Bonded", value: deployer.bonded.toString() },
     { label: "Tokens", value: deployer.token_count.toString() },
+    { label: "Followers", value: fmtCompact(deployer.followers_count) },
+    { label: "Following", value: fmtCompact(deployer.following_count) },
+    { label: "Likes", value: fmtCompact(deployer.likes_received) },
+    { label: "Mentions", value: fmtCompact(deployer.mentions_received) },
   ];
 
   const graphic: any[] = [];
@@ -108,19 +321,25 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
     z: 100,
   });
 
-  if (deployer.avatar_url) {
-    graphic.push({
-      type: "image",
-      left: 12,
-      top: 38,
-      style: { image: deployer.avatar_url, width: 44, height: 44 },
-      z: 100,
-    });
-  }
+  graphic.push({
+    type: "group",
+    left: 12,
+    top: 38,
+    clipPath: { type: "circle", shape: { cx: 22, cy: 22, r: 22 } },
+    children: [
+      {
+        type: "image",
+        style: { image: deployer.avatar_url || PUMP_AVATAR_FALLBACK, width: 44, height: 44 },
+      },
+    ],
+    z: 100,
+  });
+
+  const pumpProfileUrl = `https://pump.fun/profile/${deployer.creator}`;
 
   graphic.push({
     type: "text",
-    left: deployer.avatar_url ? 64 : 12,
+    left: 64,
     top: 40,
     style: {
       text: deployer.creator_display_name,
@@ -129,27 +348,47 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
       fontWeight: 700,
       fontFamily: "'DM Sans', sans-serif",
     },
+    cursor: "pointer" as any,
+    onclick: () => window.open(pumpProfileUrl, "_blank"),
     z: 100,
   });
 
   graphic.push({
     type: "text",
-    left: deployer.avatarUrl ? 64 : 12,
+    left: 64,
     top: 62,
     style: {
-      text: truncAddr,
+      text: deployer.creator,
       fill: "rgba(255,255,255,0.35)",
-      fontSize: 11,
+      fontSize: 10,
       fontFamily: "'JetBrains Mono', monospace",
     },
+    cursor: "pointer" as any,
+    onclick: () => window.open(pumpProfileUrl, "_blank"),
     z: 100,
   });
 
+  if (deployer.bio) {
+    graphic.push({
+      type: "text",
+      left: 64,
+      top: 78,
+      style: {
+        text: deployer.bio.length > 80 ? deployer.bio.slice(0, 80) + "…" : deployer.bio,
+        fill: "rgba(255,255,255,0.3)",
+        fontSize: 10,
+        fontFamily: "'DM Sans', sans-serif",
+      },
+      z: 100,
+    });
+  }
+
+  const socialsTop = deployer.bio ? 98 : 92;
   socials.forEach((s, i) => {
     graphic.push({
       type: "text",
       left: 12 + i * 100,
-      top: 92,
+      top: socialsTop,
       style: {
         text: s.label,
         fill: "rgba(255,255,255,0.45)",
@@ -163,16 +402,24 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
     });
   });
 
+  const metricsTop = socialsTop + 26;
+  const cardsPerRow = 4;
+  const cardW = 120;
+  const cardH = 46;
+  const cardGap = 10;
   metrics.forEach((m, i) => {
-    const xOffset = 12 + i * 130;
+    const col = i % cardsPerRow;
+    const row = Math.floor(i / cardsPerRow);
+    const xOffset = 12 + col * (cardW + cardGap);
+    const yOffset = metricsTop + row * (cardH + 8);
     graphic.push({
       type: "group",
       left: xOffset,
-      top: 118,
+      top: yOffset,
       children: [
         {
           type: "rect",
-          shape: { width: 120, height: 46, r: 8 },
+          shape: { width: cardW, height: cardH, r: 8 },
           style: { fill: "rgba(255,255,255,0.03)", stroke: "rgba(255,255,255,0.06)", lineWidth: 1 },
         },
         {
@@ -192,77 +439,274 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
     });
   });
 
+  // --- Latest Token Panel (right half of header area) ---
+  // Uses ~48% of the canvas width, positioned above the bar chart (within the 240px top zone).
+  // Left column: token identity + stats.  Right column: sparkline chart.
+  const allTokensSorted = [...deployer.top_tokens].sort(
+    (a, b) => (b.created_timestamp || 0) - (a.created_timestamp || 0)
+  );
+  const latest = allTokensSorted[0] as CreatorAggregateToken | undefined;
+
+  const PANEL_RIGHT = 16;
+  const PANEL_TOP = 10;
+  const PANEL_H = 220;
+
+  if (latest) {
+    const latestAth = latest.ath_market_cap || latest.usd_market_cap || 0;
+    const latestMcap = latest.usd_market_cap || 0;
+    const athRatio = latestAth > 0 ? latestMcap / latestAth : 0;
+    const healthColor = athRatio > 0.5 ? "#22c55e" : athRatio > 0.2 ? "#eab308" : "#ef4444";
+    const bondedSymbol = latest.complete ? "✓ Bonded" : "✗ Not Bonded";
+    const bondedBadgeColor = latest.complete ? "#22c55e" : "rgba(255,255,255,0.3)";
+    const tokenImgUrl = latest.image_uri || PUMP_AVATAR_FALLBACK;
+
+    const statRows: { label: string; value: string; color?: string }[] = [
+      { label: "Deployed", value: formatDate(latest.created_timestamp) },
+      { label: "Time Ago", value: formatRelativeTime(latest.created_timestamp) },
+      { label: "ATH Market Cap", value: `$${fmtCompact(latestAth)}` },
+      { label: "Current Mcap", value: `$${fmtCompact(latestMcap)}`, color: healthColor },
+      { label: "Last Traded", value: formatRelativeTime(latest.last_trade_timestamp) },
+    ];
+
+    const linkItems: { label: string; url: string }[] = [];
+    if (latest.mint) linkItems.push({ label: "pump.fun", url: `https://pump.fun/coin/${latest.mint}` });
+    if (latest.twitter) linkItems.push({ label: "X / Twitter", url: latest.twitter.startsWith("http") ? latest.twitter : `https://x.com/${latest.twitter}` });
+
+    const panelChildren: any[] = [];
+
+    panelChildren.push({
+      type: "text", left: 12, top: 10,
+      style: { text: "LATEST TOKEN", fill: "rgba(255,255,255,0.35)", fontSize: 9, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: 1.2 },
+    });
+
+    panelChildren.push({
+      type: "group", left: 12, top: 28,
+      clipPath: { type: "circle", shape: { cx: 16, cy: 16, r: 16 } },
+      children: [{ type: "image", style: { image: tokenImgUrl, width: 32, height: 32 } }],
+    });
+
+    panelChildren.push({
+      type: "text", left: 52, top: 28,
+      style: { text: latest.name || "Unknown", fill: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans', sans-serif" },
+      cursor: latest.mint ? ("pointer" as any) : undefined,
+      onclick: latest.mint ? () => window.open(`https://pump.fun/coin/${latest.mint}`, "_blank") : undefined,
+    });
+
+    panelChildren.push({
+      type: "text", left: 52, top: 46,
+      style: { text: `$${latest.symbol || "UNK"}`, fill: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "'DM Sans', sans-serif" },
+    });
+
+    panelChildren.push({
+      type: "text", left: 160, top: 32,
+      style: { text: bondedSymbol, fill: bondedBadgeColor, fontSize: 10, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" },
+    });
+
+    statRows.forEach((row, i) => {
+      const y = 68 + i * 18;
+      panelChildren.push({
+        type: "text", left: 12, top: y,
+        style: { text: row.label, fill: "rgba(255,255,255,0.35)", fontSize: 10, fontFamily: "'DM Sans', sans-serif" },
+      });
+      panelChildren.push({
+        type: "text", left: 120, top: y,
+        style: { text: row.value, fill: row.color || "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" },
+      });
+    });
+
+    if (latest.description) {
+      panelChildren.push({
+        type: "text", left: 12, top: 162,
+        style: { text: latest.description.length > 70 ? latest.description.slice(0, 70) + "…" : latest.description, fill: "rgba(255,255,255,0.25)", fontSize: 9, fontFamily: "'DM Sans', sans-serif" },
+      });
+    }
+
+    linkItems.forEach((lk, i) => {
+      panelChildren.push({
+        type: "text", left: 12 + i * 90, top: 180,
+        style: { text: lk.label, fill: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" },
+        cursor: "pointer" as any,
+        onclick: () => window.open(lk.url, "_blank"),
+      });
+    });
+
+    panelChildren.push({
+      type: "text", left: 320, top: 10,
+      style: { text: "PRICE PERFORMANCE (simulated)", fill: "rgba(255,255,255,0.25)", fontSize: 8, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: 0.8 },
+    });
+
+    // Panel background
+    graphic.push({
+      type: "rect",
+      left: "52%",
+      right: PANEL_RIGHT,
+      top: PANEL_TOP,
+      shape: { height: PANEL_H, r: 12 },
+      style: { fill: "rgba(255,255,255,0.02)", stroke: "rgba(255,255,255,0.06)", lineWidth: 1 },
+      z: 99,
+    });
+
+    // Panel content group — offset 1% right of the panel edge for padding
+    graphic.push({
+      type: "group",
+      left: "53%",
+      top: PANEL_TOP + 4,
+      children: panelChildren,
+      z: 100,
+    });
+  }
+
+  const dummyCurve = latest ? generateDummyPriceCurve(latest.usd_market_cap || 0, latest.ath_market_cap || latest.usd_market_cap || 0) : [];
+  const dummyDays = dummyCurve.map((_, i) => `D${i + 1}`);
+  const latestAthVal = latest ? (latest.ath_market_cap || latest.usd_market_cap || 0) : 0;
+  const latestMcapVal = latest ? (latest.usd_market_cap || 0) : 0;
+  const sparkHealthRatio = latestAthVal > 0 ? latestMcapVal / latestAthVal : 0;
+  const sparkColor = sparkHealthRatio > 0.5 ? "#22c55e" : sparkHealthRatio > 0.2 ? "#eab308" : "#ef4444";
+
   return {
     animation: true,
     animationDurationUpdate: 700,
     animationEasingUpdate: "cubicOut",
     backgroundColor: "#060608",
     graphic,
-    tooltip: {
-      ...TOOLTIP_BASE,
-      formatter: (params: any) => {
-        const t = params.data?.token;
-        if (!t) return params.name || "";
-        return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
-          <strong style="font-size:14px">${t.name}</strong> <span style="color:#a1a1aa">${t.symbol}</span><br/>
-          <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.usd_market_cap)} SOL<br/>
-          <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(t.volume)} SOL
-        </div>`;
-      },
-    },
-    grid: { left: 60, right: 20, top: 180, bottom: 40 },
-    xAxis: {
-      type: "category" as const,
-      data: tokens.map((t) => t.symbol),
-      axisLabel: { color: "#71717a", fontFamily: "'DM Sans', sans-serif", fontSize: 11, rotate: tokens.length > 6 ? 25 : 0 },
-      axisLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
-    },
-    yAxis: {
-      type: "value" as const,
-      name: "Market Cap (SOL)",
-      nameTextStyle: { color: "#71717a", fontSize: 10 },
-      axisLabel: { color: "#71717a", fontFamily: "'DM Sans', sans-serif", fontSize: 11 },
-      axisLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
-      splitLine: { lineStyle: { color: "rgba(255,255,255,0.04)" } },
-    },
-    series: [{
-      type: "bar",
-      id: "tokens",
-      universalTransition: { enabled: true, divideShape: "clone" },
-      animationDurationUpdate: 400,
-      animationDelayUpdate: 150,
-      barMaxWidth: 50,
-      data: tokens.map((t) => ({
-        name: t.symbol,
-        value: t.usd_market_cap,
-        token: t,
-        id: `${deployer.creator}-${t.symbol}`,
-        groupId: deployer.creator,
-        itemStyle: {
-          color,
-          borderRadius: [4, 4, 0, 0],
-          opacity: 0.6 + 0.4 * (t.usd_market_cap / maxMcap),
+    tooltip: [
+      {
+        ...TOOLTIP_BASE,
+        formatter: (params: any) => {
+          const t = params.data?.token;
+          if (!t) return params.name || "";
+          const ath = t.ath_market_cap || t.usd_market_cap || 0;
+          return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
+            <strong style="font-size:14px">${t.name}</strong> <span style="color:#a1a1aa">${t.symbol}</span><br/>
+            <span style="color:#a1a1aa">ATH Market Cap:</span> $${fmtCompact(ath)}<br/>
+            <span style="color:#a1a1aa">Current Market Cap:</span> $${fmtCompact(t.usd_market_cap)}<br/>
+            <span style="color:#a1a1aa">Bonded:</span> ${t.complete ? "Yes" : "No"}
+          </div>`;
         },
-      })),
-      label: {
-        show: true,
-        position: "top" as const,
-        formatter: (p: any) => fmtCompact(p.value),
-        color: "rgba(255,255,255,0.5)",
-        fontSize: 10,
-        fontFamily: "'JetBrains Mono', monospace",
       },
-    }],
+      {
+        ...TOOLTIP_BASE,
+        formatter: (params: any) => {
+          if (params.seriesIndex === 1) {
+            return `<span style="font-family:'JetBrains Mono',monospace;font-size:11px">$${fmtCompact(params.value)}</span>`;
+          }
+          return "";
+        },
+      },
+    ] as any,
+    grid: [
+      { left: 80, right: 20, top: 240, bottom: 40 },
+      { left: "77%", right: PANEL_RIGHT + 16, top: PANEL_TOP + 32, height: PANEL_H - 52 },
+    ],
+    xAxis: [
+      {
+        type: "category" as const,
+        gridIndex: 0,
+        data: tokens.map((t) => t.symbol),
+        axisLabel: { color: "#71717a", fontFamily: "'DM Sans', sans-serif", fontSize: 11, rotate: tokens.length > 6 ? 25 : 0 },
+        axisLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
+      },
+      {
+        type: "category" as const,
+        gridIndex: 1,
+        data: dummyDays,
+        show: false,
+      },
+    ],
+    yAxis: [
+      {
+        type: "value" as const,
+        gridIndex: 0,
+        name: "ATH Market Cap (USD)",
+        nameTextStyle: { color: "#71717a", fontSize: 10 },
+        axisLabel: {
+          color: "#71717a",
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 11,
+          formatter: (v: number) => `$${fmtCompact(v)}`,
+        },
+        axisLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
+        splitLine: { lineStyle: { color: "rgba(255,255,255,0.04)" } },
+      },
+      {
+        type: "value" as const,
+        gridIndex: 1,
+        show: false,
+      },
+    ],
+    series: [
+      {
+        type: "bar",
+        id: "tokens",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        universalTransition: { enabled: true, divideShape: "clone" },
+        animationDurationUpdate: 400,
+        animationDelayUpdate: 150,
+        barMaxWidth: 50,
+        data: tokens.map((t) => {
+          const ath = tokenAth(t);
+          return {
+            name: t.symbol,
+            value: ath,
+            token: t,
+            id: `${deployer.creator}-${t.symbol}`,
+            groupId: deployer.creator,
+            itemStyle: {
+              color,
+              borderRadius: [4, 4, 0, 0],
+              opacity: 0.6 + 0.4 * (ath / maxVal),
+            },
+          };
+        }),
+        label: {
+          show: true,
+          position: "top" as const,
+          formatter: (p: any) => `$${fmtCompact(p.value)}`,
+          color: "rgba(255,255,255,0.5)",
+          fontSize: 10,
+          fontFamily: "'JetBrains Mono', monospace",
+        },
+      },
+      ...(latest ? [{
+        type: "line" as const,
+        id: "sparkline",
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: dummyCurve,
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { color: sparkColor, width: 1.5 },
+        areaStyle: {
+          color: {
+            type: "linear" as const,
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: sparkColor.replace(")", ",0.3)").replace("rgb", "rgba") },
+              { offset: 1, color: sparkColor.replace(")", ",0.02)").replace("rgb", "rgba") },
+            ],
+          },
+        },
+        animationDuration: 1000,
+        animationDelay: 600,
+        z: 90,
+      }] : []),
+    ],
   };
+}
+
+/** Resolve which token list to display in drilldown: bonded tokens if any, otherwise top tokens. */
+function drilldownTokens(deployer: CreatorAggregate): CreatorAggregateToken[] {
+  return deployer.bonded_tokens.length > 0 ? deployer.bonded_tokens : deployer.top_tokens;
 }
 
 /** Shared children data for Phase 1 and Phase 2 — same ids so ECharts animates between them seamlessly. */
 function expandChildren(deployer: CreatorAggregate, color: string) {
-  return deployer.top_tokens.map((t) => ({
+  return drilldownTokens(deployer).map((t) => ({
     id: `${deployer.creator}-${t.symbol}`,
     groupId: deployer.creator,
     name: t.symbol,
-    value: t.usd_market_cap,
+    value: t.ath_market_cap || t.usd_market_cap,
     itemStyle: { color, borderRadius: 0 },
   }));
 }
@@ -353,7 +797,7 @@ function buildSplitOption(deployer: CreatorAggregate, mindshareMax: number): ECh
   };
 }
 
-function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[]): EChartsOption {
+function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[], circleAvatars?: Record<string, string>): EChartsOption {
   const unit = METRIC_UNITS[metric];
   
   // Map MetricKey properly since properties were renamed
@@ -361,6 +805,11 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
     switch (metric) {
       case "totalVolume": return d.volume;
       case "totalMarketCap": return d.usd_market_cap;
+      case "totalAthMarketCap": return d.total_ath_market_cap;
+      case "bonded": return d.bonded;
+      case "bondRate": return d.token_count > 0 ? Math.round((d.bonded / d.token_count) * 100) : 0;
+      case "athEfficiency": return d.token_count > 0 ? Math.round(d.total_ath_market_cap / d.token_count) : 0;
+      case "followers": return d.followers_count ?? 0;
       case "totalCreatorFees": return d.creator_fees;
       case "mindshare": return d.mindshare;
       default: return 0;
@@ -436,10 +885,13 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
               vol: { fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 14, fontFamily: "'JetBrains Mono', monospace" },
             };
             deployers.forEach((d, i) => {
-              const url = d.avatarUrl || "";
-              rich[`av${i}`] = url
-                ? { width: 22, height: 22, borderRadius: 11, backgroundColor: { image: url } as any }
-                : { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.2)" };
+              const circleUri = circleAvatars?.[d.creator];
+              if (circleUri) {
+                rich[`av${i}`] = { width: 22, height: 22, backgroundColor: { image: circleUri } as any };
+              } else {
+                const url = d.avatar_url || PUMP_AVATAR_FALLBACK;
+                rich[`av${i}`] = { width: 22, height: 22, borderRadius: 11, backgroundColor: { image: url } as any };
+              }
             });
             return {
               show: true,
@@ -448,7 +900,8 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
                 const d = p.data?.deployer as CreatorAggregate | undefined;
                 const idx = p.data?.deployerIndex as number | undefined;
                 if (d != null && typeof idx === "number") {
-                  return `{av${idx}| }  {name|${d.creator_display_name}}\n{val|${fmtCompact(d[metric as keyof CreatorAggregate] as number)}${unit ? " " + unit : ""}}  ·  {tokens|${d.token_count} tokens}`;
+                  const val = p.value ?? getMetricValue(d);
+                  return `{av${idx}| }  {name|${d.creator_display_name}}\n{val|${fmtCompact(val)}${unit ? " " + unit : ""}}  ·  {tokens|${d.token_count} tokens}`;
                 }
                 const t = p.data?.token;
                 if (t) return `{sym|${t.symbol}}\n{mcap|${fmtCompact(t.usd_market_cap)} SOL}\n{vol|Vol: ${fmtCompact(t.volume)} SOL}`;
@@ -691,13 +1144,15 @@ const ECHARTS_MODULES: Record<ChartType, () => Promise<any[]>> = {
   },
 };
 
-function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void }) {
+function EChartsWrapper({ option, chartType, onChartClick, onTokenClick }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void; onTokenClick?: (t: CreatorAggregateToken) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const echartsRef = useRef<any>(null);
   const onChartClickRef = useRef(onChartClick);
   onChartClickRef.current = onChartClick;
+  const onTokenClickRef = useRef(onTokenClick);
+  onTokenClickRef.current = onTokenClick;
 
   useEffect(() => {
     let cancelled = false;
@@ -727,6 +1182,11 @@ function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOp
     if (!instanceRef.current) {
       instanceRef.current = echartsRef.current.init(containerRef.current, undefined, { renderer: "canvas" });
       instanceRef.current.on("click", (params: any) => {
+        const t = params.data?.token as CreatorAggregateToken | undefined;
+        if (t && typeof t === "object" && "symbol" in t) {
+          onTokenClickRef.current?.(t);
+          return;
+        }
         const d = (params.data?.deployer ?? params.data?.source ?? params.data?.[3]) as CreatorAggregate | undefined;
         if (d && typeof d === "object" && "creator" in d) onChartClickRef.current?.(d);
       });
@@ -762,84 +1222,295 @@ function EChartsWrapper({ option, chartType, onChartClick }: { option: EChartsOp
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }
 
+function fmtDate(ts?: number): string {
+  if (!ts) return "—";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(ts));
+}
+
+function TokenDetailPanel({ token, onClose }: { token: CreatorAggregateToken | null; onClose: () => void }) {
+  if (!token) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative w-full max-w-md mx-4 rounded-2xl border border-white/10 bg-[#111113] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header with image */}
+        <div className="flex items-start gap-4 p-5 pb-3">
+          {token.image_uri ? (
+            <img
+              src={token.image_uri}
+              alt={token.name}
+              className="w-16 h-16 rounded-xl object-cover border border-white/10 shrink-0"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-600 text-xs shrink-0">
+              No img
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-bold text-white truncate">{token.name}</h3>
+            <p className="text-sm text-zinc-400 font-mono">{token.symbol}</p>
+            {token.mint && (
+              <a
+                href={`https://pump.fun/coin/${token.mint}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-mono text-zinc-500 hover:text-blue-400 transition-colors"
+              >
+                {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
+              </a>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-white transition-colors text-lg leading-none p-1"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Description */}
+        {token.description && (
+          <p className="px-5 pb-3 text-xs text-zinc-400 leading-relaxed line-clamp-3">{token.description}</p>
+        )}
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 gap-px bg-white/5 mx-5 mb-4 rounded-xl overflow-hidden">
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Market Cap</p>
+            <p className="text-sm font-bold text-white font-mono">${fmtCompact(token.usd_market_cap)}</p>
+          </div>
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">ATH Market Cap</p>
+            <p className="text-sm font-bold text-white font-mono">${fmtCompact(token.ath_market_cap)}</p>
+          </div>
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Created</p>
+            <p className="text-xs font-medium text-white">{fmtDate(token.created_timestamp)}</p>
+          </div>
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Last Traded</p>
+            <p className="text-xs font-medium text-white">{fmtDate(token.last_trade_timestamp)}</p>
+          </div>
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Bonded</p>
+            <p className="text-sm font-bold text-white flex items-center gap-1.5">
+              {token.complete ? (
+                <><span className="inline-block w-3 h-3 rounded-full bg-emerald-500 border-2 border-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.5)]" /> Yes</>
+              ) : (
+                <><span className="inline-block w-3 h-3 rounded-full bg-zinc-600 border-2 border-zinc-500" /> No</>
+              )}
+            </p>
+          </div>
+          <div className="bg-[#111113] p-3">
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Volume</p>
+            <p className="text-sm font-bold text-white font-mono">{fmtCompact(token.volume)}</p>
+          </div>
+        </div>
+
+        {/* Links */}
+        <div className="flex items-center gap-2 px-5 pb-5 flex-wrap">
+          {token.mint && (
+            <a
+              href={`https://pump.fun/coin/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-semibold text-zinc-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/10"
+            >
+              pump.fun
+            </a>
+          )}
+          {token.twitter && (
+            <a
+              href={token.twitter}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-semibold text-zinc-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/10"
+            >
+              X / Twitter
+            </a>
+          )}
+          {token.mint && (
+            <a
+              href={`https://solscan.io/token/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-semibold text-zinc-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/10"
+            >
+              Solscan
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard() {
-  const [deployers, setDeployers] = useState<CreatorAggregate[]>([]);
+  const [allCoins, setAllCoins] = useState<any[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
-  const [metric, setMetric] = useState<MetricKey>("mindshare");
+  const [filters, setFilters] = useState<CoinFilters>({ ...DEFAULT_FILTERS });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [metric, setMetric] = useState<MetricKey>("bonded");
   const [chartType, setChartType] = useState<ChartType>("treemap");
   const [selected, setSelected] = useState<CreatorAggregate | null>(null);
   const [expandingDeployer, setExpandingDeployer] = useState<CreatorAggregate | null>(null);
   const [splittingDeployer, setSplittingDeployer] = useState<CreatorAggregate | null>(null);
   const [expandedDeployer, setExpandedDeployer] = useState<CreatorAggregate | null>(null);
+  const [selectedToken, setSelectedToken] = useState<CreatorAggregateToken | null>(null);
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [circleAvatars, setCircleAvatars] = useState<Record<string, string>>({});
 
+  const updateFilter = useCallback(<K extends keyof CoinFilters>(key: K, val: CoinFilters[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: val }));
+  }, []);
+
+  // Fetch raw coins once
   useEffect(() => {
-    async function fetchDeployers() {
+    async function fetchCoins() {
       try {
         const res = await fetch("https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k");
         const coins = await res.json();
-        
-        // if (!json.success || !json.data) throw new Error("Failed to fetch PumpFun coins");
-        
-        // const coins = json;
-        
-        // Aggregate coins by creator
-        const creatorMap = new Map<string, CreatorAggregate>();
-        
-        coins.forEach((coin: any) => {
-          const c = coin.creator;
-          if (!c || c === '11111111111111111111111111111111') return;
-          
-          if (!creatorMap.has(c)) {
-            creatorMap.set(c, {
-              creator: c,
-              creator_display_name: `${c.slice(0, 4)}...${c.slice(-4)}`,
-              token_count: 0,
-              volume: 0,
-              usd_market_cap: 0,
-              creator_fees: 0,
-              mindshare: 0,
-              top_tokens: [],
-            });
-          }
-          
-          const deployer = creatorMap.get(c)!;
-          deployer.token_count += 1;
-          deployer.usd_market_cap += (coin.usd_market_cap || 0);
-          
-          deployer.top_tokens.push({
-            name: coin.name || "Unknown",
-            symbol: coin.symbol || "UNK",
-            usd_market_cap: coin.usd_market_cap || 0,
-            volume: 0, // Fallback as volume not natively in route
-          });
-        });
-        
-        const aggregated = Array.from(creatorMap.values()).map(d => {
-          // Compute derived values
-          d.mindshare = d.usd_market_cap / 1000;
-          d.top_tokens = d.top_tokens.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 5);
-          return d;
-        });
-        
-        // Top 30 Deployers
-        const sorted = aggregated.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 30);
-        
-        setDeployers(sorted);
+        if (Array.isArray(coins)) setAllCoins(coins);
       } catch (err) {
-        console.error("Failed to fetch deployers:", err);
+        console.error("Failed to fetch coins:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchDeployers();
+    fetchCoins();
   }, []);
+
+  // Enrich with profiles (non-blocking, runs once after coins arrive)
+  useEffect(() => {
+    if (allCoins.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const creators = new Set<string>();
+      allCoins.forEach((c: any) => { if (c.creator && c.creator !== "11111111111111111111111111111111") creators.add(c.creator); });
+      const addresses = Array.from(creators);
+      const BATCH = 50;
+      const all: Record<string, any> = {};
+      for (let i = 0; i < addresses.length; i += BATCH) {
+        const batch = addresses.slice(i, i + BATCH);
+        try {
+          const r = await fetch("/api/pumpfun/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ addresses: batch }),
+          });
+          if (r.ok) {
+            const { profiles } = await r.json();
+            if (profiles) Object.assign(all, profiles);
+          }
+        } catch { /* non-critical */ }
+      }
+      if (!cancelled && Object.keys(all).length > 0) setProfileMap(all);
+    })();
+    return () => { cancelled = true; };
+  }, [allCoins]);
+
+  // Reactive aggregation: filter coins -> aggregate -> filter creators
+  const deployers = useMemo(() => {
+    if (allCoins.length === 0) return [];
+    const filtered = allCoins.filter((coin) => {
+      const c = coin.creator;
+      if (!c || c === "11111111111111111111111111111111") return false;
+      return passesCoinFilter(coin, filters);
+    });
+
+    const creatorMap = new Map<string, CreatorAggregate>();
+    filtered.forEach((coin: any) => {
+      const c = coin.creator;
+      if (!creatorMap.has(c)) {
+        const p = profileMap[c];
+        creatorMap.set(c, {
+          creator: c,
+          creator_display_name: p?.username || `${c.slice(0, 4)}...${c.slice(-4)}`,
+          avatar_url: p?.profile_image || pumpAvatarUrl(c),
+          profile_image: p?.profile_image || undefined,
+          username: p?.username || undefined,
+          followers_count: p?.followers ?? undefined,
+          following_count: p?.following ?? undefined,
+          likes_received: p?.likes_received ?? undefined,
+          mentions_received: p?.mentions_received ?? undefined,
+          bio: p?.bio || undefined,
+          x_username: p?.x_username || undefined,
+          twitter_url: p?.x_username ? `https://x.com/${p.x_username}` : undefined,
+          token_count: 0,
+          bonded: 0,
+          volume: 0,
+          usd_market_cap: 0,
+          total_ath_market_cap: 0,
+          creator_fees: 0,
+          mindshare: 0,
+          top_tokens: [],
+          bonded_tokens: [],
+        });
+      }
+      const deployer = creatorMap.get(c)!;
+      deployer.token_count += 1;
+      if (coin.complete === true) deployer.bonded += 1;
+      deployer.usd_market_cap += coin.usd_market_cap || 0;
+      deployer.total_ath_market_cap += coin.ath_market_cap || 0;
+      const tokenEntry: CreatorAggregateToken = {
+        name: coin.name || "Unknown",
+        symbol: coin.symbol || "UNK",
+        usd_market_cap: coin.usd_market_cap || 0,
+        volume: 0,
+        mint: coin.mint,
+        description: coin.description,
+        image_uri: coin.image_uri,
+        twitter: coin.twitter,
+        created_timestamp: coin.created_timestamp,
+        last_trade_timestamp: coin.last_trade_timestamp,
+        complete: coin.complete,
+        ath_market_cap: coin.ath_market_cap,
+      };
+      deployer.top_tokens.push(tokenEntry);
+      if (coin.complete === true) deployer.bonded_tokens.push(tokenEntry);
+    });
+
+    const aggregated = Array.from(creatorMap.values()).map((d) => {
+      d.mindshare = d.usd_market_cap / 1000;
+      d.top_tokens = d.top_tokens.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 5);
+      d.bonded_tokens = d.bonded_tokens.sort((a, b) => (b.ath_market_cap || 0) - (a.ath_market_cap || 0));
+      return d;
+    });
+
+    return aggregated
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
+  }, [allCoins, filters, profileMap]);
+
+  // Pre-load circular avatar data URIs
+  useEffect(() => {
+    if (deployers.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries: [string, string][] = [];
+      await Promise.all(
+        deployers.map(async (d) => {
+          const url = d.avatar_url || PUMP_AVATAR_FALLBACK;
+          const dataUri = await circleAvatarDataUri(url, 44);
+          if (dataUri) entries.push([d.creator, dataUri]);
+        })
+      );
+      if (!cancelled) setCircleAvatars(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [deployers]);
 
   const totals = useMemo(() => ({
     deployers: deployers.length,
-    volume: deployers.reduce((s, d) => s + d.totalVolume, 0),
-    marketCap: deployers.reduce((s, d) => s + d.totalMarketCap, 0),
-    fees: deployers.reduce((s, d) => s + d.totalCreatorFees, 0),
+    volume: deployers.reduce((s, d) => s + (d.volume ?? 0), 0),
+    marketCap: deployers.reduce((s, d) => s + (d.usd_market_cap ?? 0), 0),
+    fees: deployers.reduce((s, d) => s + (d.creator_fees ?? 0), 0),
   }), [deployers]);
 
   const mindshareMax = useMemo(() => Math.max(1, ...deployers.map((d) => d.mindshare)), [deployers]);
@@ -869,8 +1540,8 @@ export default function AnalyticsDashboard() {
     if (chartType === "treemap" && expandedDeployer) {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
     }
-    return buildOption(chartType, metric, mindshareMax, deployers);
-  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers]);
+    return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars);
+  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars]);
 
   useEffect(() => {
     if (!expandingDeployer) return;
@@ -902,6 +1573,10 @@ export default function AnalyticsDashboard() {
       setSelected(d);
     }
   }, [chartType, clearPhaseTimeout]);
+
+  const handleTokenClick = useCallback((t: CreatorAggregateToken) => {
+    setSelectedToken(t);
+  }, []);
 
   const STAT_CARDS = [
     { label: "Deployers", value: totals.deployers.toString(), unit: "" },
@@ -984,14 +1659,27 @@ export default function AnalyticsDashboard() {
             <span className="flex items-center text-[10px] text-zinc-600 mr-1 uppercase tracking-widest font-bold">Metric</span>
             {METRICS.map((m) => {
               const active = metric === m.key;
+              const disabled = DISABLED_METRICS.has(m.key);
               return (
                 <button
                   key={m.key}
-                  onClick={() => { setMetric(m.key); clearPhaseTimeout(); setExpandingDeployer(null); setSplittingDeployer(null); setExpandedDeployer(null); }}
+                  type="button"
+                  disabled={disabled}
+                  title={disabled ? "Coming soon" : undefined}
+                  onClick={() => {
+                    if (disabled) return;
+                    setMetric(m.key);
+                    clearPhaseTimeout();
+                    setExpandingDeployer(null);
+                    setSplittingDeployer(null);
+                    setExpandedDeployer(null);
+                  }}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
-                    active
-                      ? "text-white border-purple-500/40 bg-purple-500/15"
-                      : "text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/[0.03]"
+                    disabled
+                      ? "text-zinc-600 border-transparent bg-white/[0.02] cursor-not-allowed opacity-60"
+                      : active
+                        ? "text-white border-purple-500/40 bg-purple-500/15"
+                        : "text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/[0.03]"
                   }`}
                 >
                   {m.icon}
@@ -999,6 +1687,239 @@ export default function AnalyticsDashboard() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Filter toggle */}
+          <div className="relative ml-auto">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
+                filtersOpen || countActiveFilters(filters) > 0
+                  ? "text-white border-amber-500/40 bg-amber-500/15"
+                  : "text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/[0.03]"
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Filters</span>
+              {countActiveFilters(filters) > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[9px] font-bold leading-none">
+                  {countActiveFilters(filters)}
+                </span>
+              )}
+            </button>
+
+            {filtersOpen && (
+              <div className="absolute right-0 top-full mt-2 z-50 w-[420px] max-h-[70vh] overflow-y-auto rounded-xl bg-[#111113] border border-white/10 shadow-2xl p-4 text-[11px]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Filters</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFilters({ ...DEFAULT_FILTERS })}
+                      className="text-[10px] text-zinc-500 hover:text-white transition-colors"
+                    >
+                      Reset All
+                    </button>
+                    <button type="button" onClick={() => setFiltersOpen(false)} className="text-zinc-500 hover:text-white">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* --- Market Cap --- */}
+                <div className="mb-4">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Market Cap</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-zinc-500">ATH Min ($)</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.athMarketCapMin ?? ""}
+                        onChange={(e) => updateFilter("athMarketCapMin", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">ATH Max ($)</span>
+                      <input
+                        type="number"
+                        placeholder="No limit"
+                        value={filters.athMarketCapMax ?? ""}
+                        onChange={(e) => updateFilter("athMarketCapMax", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Current Min ($)</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.marketCapMin ?? ""}
+                        onChange={(e) => updateFilter("marketCapMin", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Current Max ($)</span>
+                      <input
+                        type="number"
+                        placeholder="No limit"
+                        value={filters.marketCapMax ?? ""}
+                        onChange={(e) => updateFilter("marketCapMax", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* --- Token Status --- */}
+                <div className="mb-4">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Token Status</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.bondedOnly} onChange={(e) => { updateFilter("bondedOnly", e.target.checked); if (e.target.checked) updateFilter("notBondedOnly", false); }} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Bonded Only</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.notBondedOnly} onChange={(e) => { updateFilter("notBondedOnly", e.target.checked); if (e.target.checked) updateFilter("bondedOnly", false); }} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Not Bonded Only</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-zinc-500">Created After</span>
+                      <input
+                        type="date"
+                        value={filters.createdAfter}
+                        onChange={(e) => updateFilter("createdAfter", e.target.value)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40 [color-scheme:dark]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Last Traded After</span>
+                      <input
+                        type="date"
+                        value={filters.lastTradedAfter}
+                        onChange={(e) => updateFilter("lastTradedAfter", e.target.value)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40 [color-scheme:dark]"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* --- Token Quality --- */}
+                <div className="mb-4">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Token Quality</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.excludeNsfw} onChange={(e) => updateFilter("excludeNsfw", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Exclude NSFW</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.excludeBanned} onChange={(e) => updateFilter("excludeBanned", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Exclude Banned</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="block">
+                      <span className="text-zinc-500">Min Replies</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.minReplyCount ?? ""}
+                        onChange={(e) => updateFilter("minReplyCount", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Min SOL Reserves</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="0"
+                        value={filters.minRealSolReserves ?? ""}
+                        onChange={(e) => updateFilter("minRealSolReserves", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Min Liq. Ratio</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0"
+                        value={filters.minLiquidityRatio ?? ""}
+                        onChange={(e) => updateFilter("minLiquidityRatio", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* --- Creator --- */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Creator</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.hasPfpOnly} onChange={(e) => updateFilter("hasPfpOnly", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Has PFP</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-zinc-500">Min Tokens</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.minTokenCount ?? ""}
+                        onChange={(e) => updateFilter("minTokenCount", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Max Tokens</span>
+                      <input
+                        type="number"
+                        placeholder="No limit"
+                        value={filters.maxTokenCount ?? ""}
+                        onChange={(e) => updateFilter("maxTokenCount", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Min Bond Rate (%)</span>
+                      <input
+                        type="number"
+                        step="1"
+                        placeholder="0"
+                        value={filters.minBondRate ?? ""}
+                        onChange={(e) => updateFilter("minBondRate", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-zinc-500">Min Followers</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.minFollowers ?? ""}
+                        onChange={(e) => updateFilter("minFollowers", e.target.value ? Number(e.target.value) : null)}
+                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Active count */}
+                {countActiveFilters(filters) > 0 && (
+                  <p className="mt-3 pt-3 border-t border-white/5 text-zinc-500 text-center">
+                    Showing {deployers.length} deployers with {countActiveFilters(filters)} active filter{countActiveFilters(filters) !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
@@ -1010,7 +1931,12 @@ export default function AnalyticsDashboard() {
         transition={{ delay: 0.15 }}
         className="flex-1 min-h-[200px] mx-2 mb-2 rounded-2xl border border-white/5 bg-white/[0.01] overflow-hidden"
       >
-        <EChartsWrapper option={option} chartType={chartType} onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick} />
+        <EChartsWrapper
+          option={option}
+          chartType={chartType}
+          onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick}
+          onTokenClick={expandedDeployer ? handleTokenClick : undefined}
+        />
       </motion.div>
 
       {/* Footer */}
@@ -1033,6 +1959,7 @@ export default function AnalyticsDashboard() {
       </footer>
 
       <DeployerDetail deployer={selected} metricLabels={METRIC_LABELS} onClose={() => setSelected(null)} />
+      <TokenDetailPanel token={selectedToken} onClose={() => setSelectedToken(null)} />
     </div>
   );
 }

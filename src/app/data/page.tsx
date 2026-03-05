@@ -18,11 +18,14 @@ const fmt = (n: number) =>
 const fmtUsd = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type SortKey = "mindshare" | "token_count" | "volume" | "usd_market_cap" | "creator_fees" | "creator_display_name";
+type SortKey = "mindshare" | "token_count" | "bonded" | "volume" | "usd_market_cap" | "creator_fees" | "creator_display_name" | "followers_count" | "likes_received";
 
 const NUMERIC_COLS: { key: SortKey; label: string }[] = [
   { key: "mindshare", label: "Mindshare" },
   { key: "token_count", label: "Tokens" },
+  { key: "bonded", label: "Bonded" },
+  { key: "followers_count", label: "Followers" },
+  { key: "likes_received", label: "Likes" },
   { key: "volume", label: "Volume" },
   { key: "usd_market_cap", label: "Market Cap (USD)" },
   { key: "creator_fees", label: "Creator Fees" },
@@ -55,24 +58,31 @@ export default function DataPage() {
               creator: c,
               creator_display_name: `${c.slice(0, 4)}...${c.slice(-4)}`,
               token_count: 0,
+              bonded: 0,
               volume: 0,
               usd_market_cap: 0,
+              total_ath_market_cap: 0,
               creator_fees: 0,
               mindshare: 0,
               top_tokens: [],
+              bonded_tokens: [],
             });
           }
 
           const d = creatorMap.get(c)!;
           d.token_count += 1;
+          if (coin.complete === true) d.bonded += 1;
           d.usd_market_cap += coin.usd_market_cap || 0;
+          d.total_ath_market_cap += coin.ath_market_cap || 0;
 
-          d.top_tokens.push({
+          const tokenEntry = {
             name: coin.name || "Unknown",
             symbol: coin.symbol || "UNK",
             usd_market_cap: coin.usd_market_cap || 0,
             volume: 0,
-          });
+          };
+          d.top_tokens.push(tokenEntry);
+          if (coin.complete === true) d.bonded_tokens.push(tokenEntry);
         });
 
         const aggregated = Array.from(creatorMap.values()).map((d) => {
@@ -85,6 +95,40 @@ export default function DataPage() {
 
         const sorted = aggregated.sort((a, b) => b.usd_market_cap - a.usd_market_cap);
         setDeployers(sorted);
+
+        // Enrich top 50 with pump.fun user profiles (non-blocking)
+        try {
+          const top50 = sorted.slice(0, 50);
+          const profileRes = await fetch("/api/pumpfun/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ addresses: top50.map((d) => d.creator) }),
+          });
+          if (profileRes.ok) {
+            const { profiles } = await profileRes.json();
+            if (profiles) {
+              setDeployers((prev) =>
+                prev.map((d) => {
+                  const p = profiles[d.creator];
+                  if (!p) return d;
+                  return {
+                    ...d,
+                    creator_display_name: p.username || d.creator_display_name,
+                    avatar_url: p.profile_image || d.avatar_url,
+                    username: p.username || undefined,
+                    followers_count: p.followers ?? undefined,
+                    following_count: p.following ?? undefined,
+                    likes_received: p.likes_received ?? undefined,
+                    x_username: p.x_username || undefined,
+                    bio: p.bio || undefined,
+                  };
+                })
+              );
+            }
+          }
+        } catch (profileErr) {
+          console.warn("Failed to fetch creator profiles:", profileErr);
+        }
       } catch (err: any) {
         console.error("Failed to fetch deployers:", err);
         setError(err.message || "Failed to load data");
@@ -98,8 +142,8 @@ export default function DataPage() {
   const sorted = useMemo(() => {
     const copy = [...deployers];
     copy.sort((a, b) => {
-      const av = a[sortKey as keyof CreatorAggregate];
-      const bv = b[sortKey as keyof CreatorAggregate];
+      const av = a[sortKey as keyof CreatorAggregate] ?? 0;
+      const bv = b[sortKey as keyof CreatorAggregate] ?? 0;
       if (typeof av === "number" && typeof bv === "number") {
         return sortDir === "desc" ? bv - av : av - bv;
       }
@@ -156,12 +200,14 @@ export default function DataPage() {
             <thead>
               <tr className="border-b border-zinc-800 text-left text-zinc-400">
                 <th className="py-2 px-3 font-medium">#</th>
+                <th className="py-2 px-3 font-medium w-10"></th>
                 <th
                   className="py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
                   onClick={() => toggleSort("creator_display_name")}
                 >
                   Creator{arrow("creator_display_name")}
                 </th>
+                <th className="py-2 px-3 font-medium">X</th>
                 <th className="py-2 px-3 font-medium">Address</th>
                 {NUMERIC_COLS.map((c) => (
                   <th
@@ -186,7 +232,34 @@ export default function DataPage() {
                       onClick={() => setExpandedAddr(isExpanded ? null : d.creator)}
                     >
                       <td className="py-2 px-3 text-zinc-500">{i + 1}</td>
+                      <td className="py-2 px-3">
+                        {d.avatar_url ? (
+                          <img
+                            src={d.avatar_url}
+                            alt=""
+                            className="w-7 h-7 rounded-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).src = "https://pump.mypinata.cloud/ipfs/QmeSzchzEPqCU1jwTnsipwcBAeH7S4bmVvFGfF65iA1BY1"; }}
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-zinc-700" />
+                        )}
+                      </td>
                       <td className="py-2 px-3 font-medium">{d.creator_display_name}</td>
+                      <td className="py-2 px-3 text-xs text-zinc-400">
+                        {d.x_username ? (
+                          <a
+                            href={`https://x.com/${d.x_username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-blue-400"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            @{d.x_username}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )}
+                      </td>
                       <td className="py-2 px-3 font-mono text-xs text-zinc-400">
                         <a
                           href={`https://pump.fun/profile/${d.creator}`}
@@ -202,6 +275,9 @@ export default function DataPage() {
                         {d.mindshare.toFixed(1)}
                       </td>
                       <td className="py-2 px-3 text-right font-mono">{d.token_count}</td>
+                      <td className="py-2 px-3 text-right font-mono">{d.bonded}</td>
+                      <td className="py-2 px-3 text-right font-mono">{d.followers_count != null ? fmt(d.followers_count) : "—"}</td>
+                      <td className="py-2 px-3 text-right font-mono">{d.likes_received != null ? fmt(d.likes_received) : "—"}</td>
                       <td className="py-2 px-3 text-right font-mono">{fmt(d.volume)}</td>
                       <td className="py-2 px-3 text-right font-mono">{fmtUsd(d.usd_market_cap)}</td>
                       <td className="py-2 px-3 text-right font-mono">{fmt(d.creator_fees)}</td>
@@ -256,9 +332,10 @@ function ExpandedDetail({ deployer }: { deployer: CreatorAggregate }) {
   return (
     <div className="space-y-4">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
         <Stat label="Mindshare" value={deployer.mindshare.toFixed(1)} />
         <Stat label="Tokens Deployed" value={String(deployer.token_count)} />
+        <Stat label="Bonded" value={String(deployer.bonded)} />
         <Stat label="Volume" value={fmt(deployer.volume)} />
         <Stat label="Market Cap (USD)" value={fmtUsd(deployer.usd_market_cap)} />
         <Stat label="Creator Fees" value={fmt(deployer.creator_fees)} />
@@ -344,11 +421,11 @@ function ExpandedDetail({ deployer }: { deployer: CreatorAggregate }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {analytics.balances.map((b) => (
-                    <tr key={b.mint} className="border-b border-zinc-800/30">
+                  {analytics.balances.map((b, i) => (
+                    <tr key={b.mint ?? `bal-${i}`} className="border-b border-zinc-800/30">
                       <td className="py-1 px-2">{b.name || b.symbol || "—"}</td>
                       <td className="py-1 px-2 font-mono text-zinc-500">
-                        {b.mint.slice(0, 6)}...{b.mint.slice(-4)}
+                        {b.mint ? `${b.mint.slice(0, 6)}...${b.mint.slice(-4)}` : "—"}
                       </td>
                       <td className="py-1 px-2 text-right font-mono">{fmt(b.amount)}</td>
                       <td className="py-1 px-2 text-right font-mono">{fmtUsd(b.usd_value)}</td>
@@ -379,20 +456,24 @@ function ExpandedDetail({ deployer }: { deployer: CreatorAggregate }) {
                 </thead>
                 <tbody>
                   {analytics.createdCoins
-                    .sort((a, b) => b.usd_market_cap - a.usd_market_cap)
-                    .map((c) => (
-                      <tr key={c.mint} className="border-b border-zinc-800/30 hover:bg-zinc-800/20">
-                        <td className="py-1 px-2">{c.name}</td>
-                        <td className="py-1 px-2 font-mono text-zinc-400">{c.symbol}</td>
+                    .sort((a, b) => (b.usd_market_cap ?? 0) - (a.usd_market_cap ?? 0))
+                    .map((c, i) => (
+                      <tr key={c.mint ?? `coin-${i}`} className="border-b border-zinc-800/30 hover:bg-zinc-800/20">
+                        <td className="py-1 px-2">{c.name ?? "—"}</td>
+                        <td className="py-1 px-2 font-mono text-zinc-400">{c.symbol ?? "—"}</td>
                         <td className="py-1 px-2 font-mono text-zinc-500">
-                          <a
-                            href={`https://pump.fun/coin/${c.mint}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-blue-400"
-                          >
-                            {c.mint.slice(0, 6)}...{c.mint.slice(-4)}
-                          </a>
+                          {c.mint ? (
+                            <a
+                              href={`https://pump.fun/coin/${c.mint}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:text-blue-400"
+                            >
+                              {c.mint.slice(0, 6)}...{c.mint.slice(-4)}
+                            </a>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="py-1 px-2 text-right font-mono">{fmtUsd(c.usd_market_cap)}</td>
                         <td className="py-1 px-2 text-right font-mono">{fmtUsd(c.ath_market_cap)}</td>

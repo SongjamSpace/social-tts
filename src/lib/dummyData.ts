@@ -123,11 +123,16 @@ export const DEPLOYERS: Deployer[] = RAW.map((d, i) => ({
   mindshare: Math.round((nVol[i] * 0.4 + nMcap[i] * 0.35 + nFees[i] * 0.25) * 1000) / 10,
 }));
 
-export type MetricKey = "totalVolume" | "totalMarketCap" | "totalCreatorFees" | "mindshare";
+export type MetricKey = "totalVolume" | "totalMarketCap" | "totalAthMarketCap" | "totalCreatorFees" | "mindshare" | "bonded" | "bondRate" | "athEfficiency" | "followers";
 
 export const METRIC_LABELS: Record<MetricKey, string> = {
   totalVolume: "Total Volume",
   totalMarketCap: "Total Market Cap",
+  totalAthMarketCap: "Total ATH Market Cap",
+  bonded: "Bonded",
+  bondRate: "Bond Rate",
+  athEfficiency: "ATH Efficiency",
+  followers: "Followers",
   totalCreatorFees: "Creator Fees",
   mindshare: "Mindshare",
 };
@@ -135,6 +140,11 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
 export const METRIC_UNITS: Record<MetricKey, string> = {
   totalVolume: "SOL",
   totalMarketCap: "SOL",
+  totalAthMarketCap: "USD",
+  bonded: "",
+  bondRate: "%",
+  athEfficiency: "USD",
+  followers: "",
   totalCreatorFees: "SOL",
   mindshare: "",
 };

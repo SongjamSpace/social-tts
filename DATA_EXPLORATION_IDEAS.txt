@@ -1,0 +1,205 @@
+Data Exploration Ideas for Pump.fun Analytics Dashboard
+========================================================
+
+1. TOKEN-LEVEL EXPLORATION (not just creator-level)
+----------------------------------------------------
+
+a. Token Treemap / Token Table
+   Right now the treemap is organized by creator. Add a toggle or separate view
+   that flattens every individual token into its own rectangle, sized by market
+   cap or ATH. This lets users spot high-performing tokens from smaller creators
+   who'd be invisible in the creator-level view.
+
+b. Token Search / Filter
+   A search bar that finds any token by name, symbol, or mint address across all
+   creators. Clicking a result navigates to the token detail panel or highlights
+   the creator on the treemap.
+
+c. "Rising Tokens" Feed
+   Sort all tokens by ath_market_cap / usd_market_cap ratio (i.e. how close a
+   token is to its ATH). Tokens near 1.0 are "at ATH" — a live signal.
+   Alternatively, sort by last_trade_timestamp to show the most recently active
+   tokens.
+
+
+2. DERIVED METRICS & RANKINGS
+------------------------------
+
+d. Bond Rate Leaderboard
+   bonded / token_count — the percentage of a creator's tokens that successfully
+   bonded. A creator who bonds 8/10 tokens is far more interesting than one who
+   bonds 8/500. This is a strong "quality" signal.
+
+e. ATH Efficiency
+   total_ath_market_cap / token_count — average peak market cap per token.
+   Identifies creators who consistently produce high-cap tokens, not just volume.
+
+f. "Hit Rate" Score
+   Composite score combining bond rate, average ATH, and follower count. Weight
+   them however you like. This becomes a single "alpha" number for ranking.
+
+g. Recency-Weighted Activity
+   Weight tokens by how recently they were created (created_timestamp). A creator
+   who bonded 5 tokens last week is more relevant than one who bonded 5 tokens
+   six months ago.
+
+h. "Dead Token" Ratio
+   Tokens where last_trade_timestamp is very old (e.g. >7 days ago) and not
+   bonded. dead_tokens / token_count shows how many of a creator's launches
+   fizzled out.
+
+
+3. ALTERNATE VISUALIZATIONS
+-----------------------------
+
+i. Scatter Plot: Bond Rate vs. ATH per Token
+   X-axis = bond rate, Y-axis = avg ATH market cap, bubble size = token count.
+   Each bubble is a creator. This instantly separates quality creators (top-right)
+   from spam deployers (bottom-left).
+
+j. Timeline / Activity Heatmap
+   Plot token created_timestamp on a calendar heatmap (like GitHub contributions).
+   Shows when a creator is most active, and reveals patterns like "deploys 20
+   tokens every Monday."
+
+k. Network Graph: Creator Social Connections
+   You already fetch followers and following for each creator. Build a
+   force-directed graph where nodes are creators and edges are follow
+   relationships. Clusters reveal "deployer communities" or coordinated groups.
+
+l. Stacked Area Chart: Creator Market Cap Over Time
+   Using created_timestamp and ath_market_cap_timestamp from each token, build a
+   time series of cumulative market cap growth per creator. Shows who's on an
+   uptrend vs. peaked and faded.
+
+
+4. FILTERING & SEGMENTATION
+-----------------------------
+
+m. Multi-Filter Sidebar
+   Add combinable filters:
+   - Min/max token count
+   - Min/max bonded count
+   - Min/max bond rate (%)
+   - Has X/Twitter account (yes/no)
+   - Has PFP (already done)
+   - Min followers
+   - Created tokens in last N days
+   - Min ATH market cap
+
+   This lets users build their own queries like "creators with >50% bond rate,
+   >1K followers, active in last 7 days."
+
+n. "Tiers" or Segments
+   Automatically bucket creators into tiers: Whale (>$1M total ATH),
+   Dolphin ($100K-$1M), Fish ($10K-$100K), Plankton (<$10K). Show tier
+   distribution as a pie chart or let users toggle which tiers are visible on
+   the treemap.
+
+o. "New Deployers" Tab
+   Filter to creators whose first token created_timestamp is within the last
+   7/30 days. Fresh deployers who are already bonding tokens are high-signal
+   alpha.
+
+
+5. COMPARISON & BENCHMARKING
+------------------------------
+
+p. Side-by-Side Creator Comparison
+   Select 2-3 creators and see their metrics in parallel columns: token count,
+   bond rate, ATH, followers, etc. Like a "vs." mode.
+
+q. Creator Percentile Ranks
+   For each metric, show where a creator sits relative to the whole dataset.
+   "Top 3% by bond rate, top 12% by ATH." This contextualizes raw numbers.
+
+
+6. SOCIAL & NARRATIVE SIGNALS
+-------------------------------
+
+r. "Has Twitter" vs. "No Twitter" Toggle
+   Similar to "Has PFP" — creators with an X account attached are making a
+   public identity bet, which correlates with seriousness.
+
+s. Bio / Description Word Cloud
+   Aggregate all token description fields for a creator and render a word cloud.
+   Reveals themes (e.g. "AI", "meme", "dog") and helps categorize deployers by
+   niche.
+
+t. Reply Count Heatmap
+   The PumpFunCoin data includes reply_count. Tokens with high reply counts have
+   community engagement. Surface creators whose tokens consistently generate
+   discussion.
+
+
+7. ALERTS & WATCHLISTS
+------------------------
+
+u. Watchlist
+   Let users star/bookmark specific creators and see a dedicated view of just
+   their watchlist. Persisted in localStorage.
+
+v. "Just Bonded" Feed
+   Poll periodically and highlight any token where complete just flipped to true.
+   Real-time alpha — a token just hit Raydium.
+
+w. Threshold Alerts
+   "Notify me when any creator with >70% bond rate launches a new token." Could
+   be client-side polling with browser notifications.
+
+
+8. DATA EXPORT & DEEP DIVES
+-----------------------------
+
+x. CSV/JSON Export
+   One-click export of the full dataset (or current filtered view) to CSV or
+   JSON. Power users will want to pull this into their own spreadsheets or
+   scripts.
+
+y. "Deep Dive" Mode
+   Click any creator to fetch their full DeployerAnalytics (you already have the
+   /api/deployer/[creator] route) and show: portfolio PnL, SOL balance, every
+   token they hold, every token they created, and their full follower list. This
+   is partially implemented in the /data page's ExpandedDetail but could be
+   surfaced more prominently.
+
+
+9. TOKEN-SPECIFIC SIGNALS FROM EXISTING FIELDS
+-------------------------------------------------
+
+z. Volatility Score Distribution
+   PumpFunCoin has volatility_score. Show a histogram of volatility across all
+   tokens, or let users filter the treemap to only show creators whose tokens
+   have high/low volatility.
+
+aa. NSFW / Banned Filter
+    nsfw and is_banned fields exist. Toggle to hide or isolate these. Some users
+    may want to filter out banned tokens; others might find the "banned but high
+    market cap" segment interesting.
+
+ab. Real SOL Reserves
+    real_sol_reserves shows actual liquidity. Creators whose tokens have high
+    real reserves relative to market cap are more "real." Could compute a
+    liquidity ratio.
+
+
+10. THE "GALAXY" VIEW
+-----------------------
+
+ac. Full Universe Visualization
+    Instead of a treemap (which inherently emphasizes the biggest), render every
+    single creator as a dot in a 2D scatter space (e.g. t-SNE or UMAP reduced
+    from their multi-dimensional metrics). Clusters would naturally form around
+    similar creator profiles. This is the most ambitious but would be a genuine
+    differentiator — no one else is doing this with pump.fun data.
+
+
+PRIORITY RECOMMENDATIONS
+--------------------------
+The lowest-hanging fruit with the most immediate impact:
+  - d (bond rate)
+  - m (multi-filter sidebar)
+  - o (new deployers)
+  - a (token-level treemap)
+
+These all use data already available and don't require any new API endpoints.
