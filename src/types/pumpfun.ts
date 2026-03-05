@@ -130,3 +130,89 @@ export interface DeployerAnalytics {
   fees?: PumpFunCreatorFees | null;
 }
 
+
+/* ── Creator Insight Analytics ────────────────────────────────── */
+
+export interface CoinTrade {
+  slotIndexId: string;
+  tx: string;
+  timestamp: string;
+  userAddress: string;
+  type: "buy" | "sell";
+  program: string;
+  priceUsd: string;
+  priceSol: string;
+  amountUsd: string;
+  amountSol: string;
+  baseAmount: string;
+  quoteAmount: string;
+}
+
+export interface CoinClipVariant {
+  name: string;
+  height: number;
+  playlistUrl: string;
+}
+
+export interface CoinClip {
+  roomName: string;
+  clipId: string;
+  sessionId: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  playlistUrl: string;
+  variants: CoinClipVariant[];
+  thumbnailUrl: string;
+  title: string;
+  clipType: string;
+  createdAt: string;
+  viewCount: number;
+}
+
+export interface ChatMessage {
+  username: string;
+  text: string;
+  timestamp: number;
+  profileImage?: string;
+  userId?: string;
+}
+
+export interface ParticipantInsight {
+  address: string;
+  username?: string;
+  profileImage?: string;
+  buyCount: number;
+  sellCount: number;
+  buyVolumeSol: number;
+  sellVolumeSol: number;
+  buyVolumeUsd: number;
+  sellVolumeUsd: number;
+  netVolumeSol: number;
+  messageCount: number;
+  firstSeen: string;
+  contributionScore: number;
+}
+
+export interface CreatorInsightCoin {
+  mint: string;
+  name: string;
+  symbol: string;
+  image_uri: string;
+  usd_market_cap: number;
+  ath_market_cap: number;
+  created_timestamp: number;
+  complete: boolean;
+  reply_count: number;
+  creator: string;
+}
+
+export interface CreatorInsightResponse {
+  coin: CreatorInsightCoin;
+  totalParticipants: number;
+  totalBuyVolumeSol: number;
+  totalSellVolumeSol: number;
+  totalMessages: number;
+  totalClips: number;
+  participants: ParticipantInsight[];
+}

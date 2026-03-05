@@ -40,6 +40,7 @@ function EveLogoIcon({ className }: { className?: string }) {
 
 const NAV_ITEMS = [
   { href: "/", label: "Analytics" },
+  { href: '/creator', label: 'Creator' },
   { href: "/voices", label: "Voice Unleashed" },
 ];
 
