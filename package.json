@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "make-favicon": "node scripts/make-favicon.mjs",
-    "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs"
+    "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs",
+    "invert-eve-logo": "node scripts/invert-eve-logo.mjs",
+    "eve-logo-white-on-black": "node scripts/eve-logo-white-on-black.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

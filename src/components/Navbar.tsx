@@ -1,51 +1,44 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 
-/** Elegant female profile — outline only (stroke) so the face contour is unmistakable. */
+/** Eve logo: inverted (white on transparent). Container sets size; img keeps aspect ratio. */
 function EveLogoIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      {/* Closed outline: neck → chin → lips → nose → forehead → crown → hair → nape → neck */}
-      <path
-        d="M 8 26
-           C 6 24 7 21 8 22
-           C 9 20 10 18 11 18.5
-           C 12 17 13 15 13 12.5
-           C 13 10 12 8 11 8.5
-           C 10 6 10 4 11 3
-           C 13 1 16 1 18 2.5
-           C 21 1 25 3 26 7
-           C 27 11 26 16 23 19
-           C 20 22 15 24 10 25
-           C 9 25 8 26 8 26 Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+    <span className={`inline-flex shrink-0 items-center justify-center ${className ?? ""}`}>
+      <img
+        src="/images/eve-logo.png"
+        alt=""
+        className="max-h-full max-w-full object-contain"
+        aria-hidden
       />
-    </svg>
+    </span>
   );
 }
 
-const NAV_ITEMS = [
-  { href: "/", label: "Analytics" },
-  { href: '/creator', label: 'Creator' },
-  { href: "/voices", label: "Voice Unleashed" },
+const BIP_OPTIONS = [
+  { id: "001", label: "#001", href: "https://moltspaces.com/pumpfun", external: true },
+  { id: "002", label: "#002", href: "/voices", external: false },
+  { id: "003", label: "#003", href: "/", external: false },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [bipOpen, setBipOpen] = useState(false);
+  const bipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (bipRef.current && !bipRef.current.contains(e.target as Node)) {
+        setBipOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#060608]/80 backdrop-blur-xl">
@@ -53,34 +46,59 @@ export default function Navbar() {
         <Link href="/" className="flex items-center gap-2.5 group text-white">
           <EveLogoIcon className="w-7 h-7 shrink-0" />
           <span className="text-lg font-black tracking-tight" style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}>
-            Eve
+            Eve<sup className="ml-0.5 text-[10px] font-semibold opacity-80 align-super">alpha</sup>
           </span>
         </Link>
 
         <div className="flex items-center gap-1">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  active
-                    ? "text-white"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="nav-pill"
-                    className="absolute inset-0 rounded-lg bg-white/[0.06] border border-white/10"
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                  />
+          <div className="relative" ref={bipRef}>
+            <button
+              type="button"
+              onClick={() => setBipOpen((o) => !o)}
+              className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                pathname === "/voices" || pathname === "/"
+                  ? "text-white"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {(pathname === "/voices" || pathname === "/") && (
+                <motion.div
+                  layoutId="nav-pill"
+                  className="absolute inset-0 rounded-lg bg-white/[0.06] border border-white/10"
+                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">BiP</span>
+              <span className="relative z-10 ml-1 opacity-70">▾</span>
+            </button>
+            {bipOpen && (
+              <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-[#111113] border border-white/10 shadow-xl z-50">
+                {BIP_OPTIONS.map((opt) =>
+                  opt.external ? (
+                    <a
+                      key={opt.id}
+                      href={opt.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block px-4 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                      onClick={() => setBipOpen(false)}
+                    >
+                      {opt.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={opt.id}
+                      href={opt.href}
+                      className="block px-4 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                      onClick={() => setBipOpen(false)}
+                    >
+                      {opt.label}
+                    </Link>
+                  )
                 )}
-                <span className="relative z-10">{item.label}</span>
-              </Link>
-            );
-          })}
+              </div>
+            )}
+          </div>
 
           <button
             type="button"
