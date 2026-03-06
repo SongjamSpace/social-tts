@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
 
     const res = await fetch(apiUrl, {
-      next: { revalidate: 60 } // Cache the response for 60 seconds
+      next: { revalidate: 120 }
     });
 
     if (!res.ok) {

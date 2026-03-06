@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, SlidersHorizontal, X } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, MessageCircle, SlidersHorizontal, X } from "lucide-react";
 import type { EChartsOption } from "echarts";
 import {
   METRIC_LABELS,
@@ -26,17 +26,19 @@ const METRICS: { key: MetricKey; icon: React.ReactNode }[] = [
   { key: "bondRate", icon: <Percent className="w-3.5 h-3.5" /> },
   { key: "athEfficiency", icon: <Zap className="w-3.5 h-3.5" /> },
   { key: "followers", icon: <Users className="w-3.5 h-3.5" /> },
+  { key: "engagement", icon: <MessageCircle className="w-3.5 h-3.5" /> },
   { key: "totalCreatorFees", icon: <DollarSign className="w-3.5 h-3.5" /> },
   { key: "mindshare", icon: <Brain className="w-3.5 h-3.5" /> },
 ];
 
 /** Metrics not yet available — shown as disabled with "Coming soon" tooltip */
-const DISABLED_METRICS: Set<MetricKey> = new Set(["totalVolume", "totalCreatorFees", "mindshare"]);
+const DISABLED_METRICS: Set<MetricKey> = new Set(["mindshare"]);
 
 /** Pump.fun creator avatar: IPFS gateway + creator address */
 const PUMP_AVATAR_BASE = "https://pump.mypinata.cloud/ipfs/";
 /** Fallback when creator avatar cannot be retrieved */
 const PUMP_AVATAR_FALLBACK = "https://pump.mypinata.cloud/ipfs/QmeSzchzEPqCU1jwTnsipwcBAeH7S4bmVvFGfF65iA1BY1";
+const MARKET_ACTIVITY_MINTS_CAP = 1500;
 
 interface CoinFilters {
   athMarketCapMin: number | null;
@@ -195,6 +197,45 @@ function circleAvatarDataUri(url: string, size: number): Promise<string> {
   });
 }
 
+const sparklineCache = new Map<string, string>();
+
+/** Sparkline size tiers so the line scales with rectangle size (value). */
+const SPARKLINE_SIZES = {
+  small: { width: 40, height: 10 },
+  medium: { width: 56, height: 16 },
+  large: { width: 72, height: 20 },
+} as const;
+type SparklineTier = keyof typeof SPARKLINE_SIZES;
+
+function drawVolumeRampSparkline(
+  volumeProfile: number[],
+  width: number,
+  height: number,
+  lineColor: string
+): string {
+  const key = `${volumeProfile.join(",")}|${width}|${height}|${lineColor}`;
+  if (sparklineCache.has(key)) return sparklineCache.get(key)!;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  const max = Math.max(...volumeProfile, 1);
+  const xs = [0.25, 0.5, 0.75, 1].map((t) => t * width);
+  const ys = volumeProfile.map((v) => height * (1 - v / max));
+  const lineWidth = Math.max(1, (width / 56) * 1.5);
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = lineWidth;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, height);
+  for (let i = 0; i < 4; i++) ctx.lineTo(xs[i], ys[i]);
+  ctx.stroke();
+  const dataUri = canvas.toDataURL("image/png");
+  sparklineCache.set(key, dataUri);
+  return dataUri;
+}
+
 function fmtCompact(v: number | undefined | null): string {
   const n = v == null || Number.isNaN(v) ? 0 : Number(v);
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -227,7 +268,8 @@ function richTooltip(d: CreatorAggregate): string {
     ${xLine}${followLine}<span style="color:#a1a1aa">Market Cap:</span> $${fmtCompact(d.usd_market_cap)}<br/>
     <span style="color:#a1a1aa">ATH Market Cap:</span> $${fmtCompact(d.total_ath_market_cap)}<br/>
     <span style="color:#a1a1aa">Bonded:</span> ${d.bonded}<br/>
-    <span style="color:#a1a1aa">Tokens:</span> ${d.token_count}
+    <span style="color:#a1a1aa">Tokens:</span> ${d.token_count}<br/>
+    <span style="color:#a1a1aa">Engagement:</span> ${Math.round((d.engagement ?? 0) * 100)}%
   </div>`;
 }
 
@@ -297,6 +339,7 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
     { label: "Market Cap", value: `$${fmtCompact(deployer.usd_market_cap)}` },
     { label: "Bonded", value: deployer.bonded.toString() },
     { label: "Tokens", value: deployer.token_count.toString() },
+    { label: "Engagement", value: `${Math.round((deployer.engagement ?? 0) * 100)}%` },
     { label: "Followers", value: fmtCompact(deployer.followers_count) },
     { label: "Following", value: fmtCompact(deployer.following_count) },
     { label: "Likes", value: fmtCompact(deployer.likes_received) },
@@ -739,6 +782,7 @@ function buildExpandOption(deployer: CreatorAggregate, mindshareMax: number): EC
       universalTransition: { enabled: true },
       roam: false,
       nodeClick: false as any,
+      breadcrumb: { show: false },
       animationDurationUpdate: 700,
       left: 0,
       top: 0,
@@ -782,6 +826,7 @@ function buildSplitOption(deployer: CreatorAggregate, mindshareMax: number): ECh
       universalTransition: { enabled: true, divideShape: "clone" },
       roam: false,
       nodeClick: false as any,
+      breadcrumb: { show: false },
       animationDurationUpdate: 700,
       left: 0,
       top: 0,
@@ -797,7 +842,7 @@ function buildSplitOption(deployer: CreatorAggregate, mindshareMax: number): ECh
   };
 }
 
-function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[], circleAvatars?: Record<string, string>): EChartsOption {
+function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[], circleAvatars?: Record<string, string>, sparklineDataUrls?: Record<string, Record<SparklineTier, string>>): EChartsOption {
   const unit = METRIC_UNITS[metric];
   
   // Map MetricKey properly since properties were renamed
@@ -810,6 +855,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
       case "bondRate": return d.token_count > 0 ? Math.round((d.bonded / d.token_count) * 100) : 0;
       case "athEfficiency": return d.token_count > 0 ? Math.round(d.total_ath_market_cap / d.token_count) : 0;
       case "followers": return d.followers_count ?? 0;
+      case "engagement": return Math.round((d.engagement ?? 0) * 100);
       case "totalCreatorFees": return d.creator_fees;
       case "mindshare": return d.mindshare;
       default: return 0;
@@ -857,7 +903,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
               return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
                 <strong style="font-size:14px">${t.name}</strong> <span style="color:#a1a1aa">${t.symbol}</span><br/>
                 <span style="color:#a1a1aa">Market Cap:</span> ${fmtCompact(t.usd_market_cap)} SOL<br/>
-                <span style="color:#a1a1aa">Volume:</span> ${fmtCompact(t.volume)} SOL
+                <span style="color:#a1a1aa">24h Vol:</span> $${fmtCompact(t.volume)} USD
               </div>`;
             }
             return "";
@@ -869,6 +915,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           universalTransition: { enabled: true },
           roam: false,
           nodeClick: false as any,
+          breadcrumb: { show: false },
           animationDurationUpdate: 700,
           left: 0,
           top: 0,
@@ -893,6 +940,18 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
                 rich[`av${i}`] = { width: 22, height: 22, borderRadius: 11, backgroundColor: { image: url } as any };
               }
             });
+            const top20ByValue = [...deployers]
+              .map((d, i) => ({ d, i }))
+              .sort((a, b) => getMetricValue(b.d) - getMetricValue(a.d))
+              .slice(0, 20);
+            const top20Indices = new Set(top20ByValue.map((x) => x.i));
+            top20ByValue.forEach(({ d, i }, rank) => {
+              const urls = sparklineDataUrls?.[d.creator];
+              if (!urls) return;
+              const tier: SparklineTier = rank < 7 ? "large" : rank < 14 ? "medium" : "small";
+              const size = SPARKLINE_SIZES[tier];
+              rich[`spark${i}`] = { width: size.width, height: size.height, backgroundColor: { image: urls[tier] } as any };
+            });
             return {
               show: true,
               position: "insideTopLeft" as any,
@@ -901,10 +960,12 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
                 const idx = p.data?.deployerIndex as number | undefined;
                 if (d != null && typeof idx === "number") {
                   const val = p.value ?? getMetricValue(d);
-                  return `{av${idx}| }  {name|${d.creator_display_name}}\n{val|${fmtCompact(val)}${unit ? " " + unit : ""}}  ·  {tokens|${d.token_count} tokens}`;
+                  const line1 = `{av${idx}| }  {name|${d.creator_display_name}}\n{val|${fmtCompact(val)}${unit ? " " + unit : ""}}  ·  {tokens|${d.token_count} tokens}`;
+                  const showSpark = top20Indices.has(idx) && sparklineDataUrls?.[d.creator] != null;
+                  return showSpark ? `${line1}\n{spark${idx}| }` : line1;
                 }
                 const t = p.data?.token;
-                if (t) return `{sym|${t.symbol}}\n{mcap|${fmtCompact(t.usd_market_cap)} SOL}\n{vol|Vol: ${fmtCompact(t.volume)} SOL}`;
+                if (t) return `{sym|${t.symbol}}\n{mcap|${fmtCompact(t.usd_market_cap)} SOL}\n{vol|24h Vol: $${fmtCompact(t.volume)} USD}`;
                 return p.name || "";
               },
               rich,
@@ -979,7 +1040,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
           },
         },
         grid: { left: 60, right: 30, top: 30, bottom: 50 },
-        xAxis: { type: "value" as const, name: "Volume (SOL)", nameTextStyle: { color: "#71717a", fontSize: 10 }, ...axisStyle },
+        xAxis: { type: "value" as const, name: "24h Volume (USD)", nameTextStyle: { color: "#71717a", fontSize: 10 }, ...axisStyle },
         yAxis: { type: "value" as const, name: "Market Cap (SOL)", nameTextStyle: { color: "#71717a", fontSize: 10 }, ...axisStyle },
         series: [{
           type: "scatter",
@@ -1001,7 +1062,7 @@ function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: numb
         legend: { data: radarTop.map((d) => d.creator_display_name), bottom: 0, textStyle: { color: "#71717a", fontSize: 10 } },
         radar: {
           indicator: [
-            { name: "Volume", max: maxVol },
+            { name: "24h Vol", max: maxVol },
             { name: "Mkt Cap", max: maxMcap },
             { name: "Fees", max: maxFees },
             { name: "Tokens", max: maxTokens },
@@ -1307,8 +1368,8 @@ function TokenDetailPanel({ token, onClose }: { token: CreatorAggregateToken | n
             </p>
           </div>
           <div className="bg-[#111113] p-3">
-            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Volume</p>
-            <p className="text-sm font-bold text-white font-mono">{fmtCompact(token.volume)}</p>
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">24h Volume</p>
+            <p className="text-sm font-bold text-white font-mono">${fmtCompact(token.volume)} USD</p>
           </div>
         </div>
 
@@ -1365,25 +1426,35 @@ export default function AnalyticsDashboard() {
   const [selectedToken, setSelectedToken] = useState<CreatorAggregateToken | null>(null);
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [circleAvatars, setCircleAvatars] = useState<Record<string, string>>({});
+  const [sparklineDataUrls, setSparklineDataUrls] = useState<Record<string, Record<SparklineTier, string>>>({});
+  type VolumeByWindow = { volume5m: number; volume1h: number; volume6h: number; volume24h: number };
+  const [marketActivityMap, setMarketActivityMap] = useState<Record<string, VolumeByWindow>>({});
+  const [marketActivityFetchedAt, setMarketActivityFetchedAt] = useState<number | null>(null);
+  const [creatorFeesMap, setCreatorFeesMap] = useState<Record<string, { totalFeesSOL: number }>>({});
+  const [creatorFeesFetchedAt, setCreatorFeesFetchedAt] = useState<number | null>(null);
 
   const updateFilter = useCallback(<K extends keyof CoinFilters>(key: K, val: CoinFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
   }, []);
 
-  // Fetch raw coins once
+  // Fetch raw coins once (via cached server-side proxy)
   useEffect(() => {
+    let cancelled = false;
     async function fetchCoins() {
       try {
-        const res = await fetch("https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k");
-        const coins = await res.json();
-        if (Array.isArray(coins)) setAllCoins(coins);
+        const res = await fetch("/api/pumpfun/coins");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        const coins = json?.data ?? json;
+        if (!cancelled && Array.isArray(coins)) setAllCoins(coins);
       } catch (err) {
         console.error("Failed to fetch coins:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     fetchCoins();
+    return () => { cancelled = true; };
   }, []);
 
   // Enrich with profiles (non-blocking, runs once after coins arrive)
@@ -1415,6 +1486,74 @@ export default function AnalyticsDashboard() {
     return () => { cancelled = true; };
   }, [allCoins]);
 
+  // Fetch 24h volume (market-activity) for all coins after they load.
+  // Send mints in "active first" order (by last_trade_timestamp) so rate limits hit less critical coins.
+  useEffect(() => {
+    if (allCoins.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const sorted = [...allCoins].sort(
+        (a: any, b: any) => (b.last_trade_timestamp ?? 0) - (a.last_trade_timestamp ?? 0)
+      );
+      const seen = new Set<string>();
+      const mints: string[] = [];
+      for (const c of sorted) {
+        const mint = c.mint;
+        if (!mint || seen.has(mint)) continue;
+        seen.add(mint);
+        mints.push(mint);
+      }
+      const capped = mints.slice(0, MARKET_ACTIVITY_MINTS_CAP);
+      if (capped.length === 0) return;
+      try {
+        const res = await fetch("/api/pumpfun/market-activity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mints: capped }),
+        });
+        if (!res.ok || cancelled) return;
+        const { marketActivity, fetchedAt } = await res.json();
+        if (cancelled) return;
+        if (marketActivity && typeof fetchedAt === "number") {
+          setMarketActivityMap(marketActivity);
+          setMarketActivityFetchedAt(fetchedAt);
+        }
+      } catch (err) {
+        console.error("Failed to fetch market activity:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [allCoins]);
+
+  // Fetch creator fees for all creators after coins load
+  useEffect(() => {
+    if (allCoins.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const creators = new Set<string>();
+      allCoins.forEach((c: any) => { if (c.creator && c.creator !== "11111111111111111111111111111111") creators.add(c.creator); });
+      const addresses = Array.from(creators);
+      if (addresses.length === 0) return;
+      try {
+        const res = await fetch("/api/pumpfun/creator-fees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ addresses }),
+        });
+        if (!res.ok || cancelled) return;
+        const { fees, fetchedAt } = await res.json();
+        if (cancelled) return;
+        if (fees && typeof fetchedAt === "number") {
+          setCreatorFeesMap(fees);
+          setCreatorFeesFetchedAt(fetchedAt);
+        }
+      } catch (err) {
+        console.error("Failed to fetch creator fees:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [allCoins]);
+
   // Reactive aggregation: filter coins -> aggregate -> filter creators
   const deployers = useMemo(() => {
     if (allCoins.length === 0) return [];
@@ -1425,6 +1564,7 @@ export default function AnalyticsDashboard() {
     });
 
     const creatorMap = new Map<string, CreatorAggregate>();
+    const volumeSums = new Map<string, { v5m: number; v1h: number; v6h: number; v24h: number }>();
     filtered.forEach((coin: any) => {
       const c = coin.creator;
       if (!creatorMap.has(c)) {
@@ -1449,20 +1589,40 @@ export default function AnalyticsDashboard() {
           total_ath_market_cap: 0,
           creator_fees: 0,
           mindshare: 0,
+          total_replies: 0,
+          recent_trade_count: 0,
           top_tokens: [],
           bonded_tokens: [],
         });
+        volumeSums.set(c, { v5m: 0, v1h: 0, v6h: 0, v24h: 0 });
       }
       const deployer = creatorMap.get(c)!;
       deployer.token_count += 1;
       if (coin.complete === true) deployer.bonded += 1;
       deployer.usd_market_cap += coin.usd_market_cap || 0;
       deployer.total_ath_market_cap += coin.ath_market_cap || 0;
+      deployer.total_replies! += coin.reply_count || 0;
+      const act = marketActivityMap[coin.mint];
+      const v5m = act?.volume5m ?? 0;
+      const v1h = act?.volume1h ?? 0;
+      const v6h = act?.volume6h ?? 0;
+      const v24h = act?.volume24h ?? 0;
+      deployer.volume += v24h;
+      const sums = volumeSums.get(c)!;
+      sums.v5m += v5m;
+      sums.v1h += v1h;
+      sums.v6h += v6h;
+      sums.v24h += v24h;
+      const lastTrade = coin.last_trade_timestamp;
+      if (lastTrade != null) {
+        const ms = lastTrade > 1e12 ? lastTrade : lastTrade * 1000;
+        if (Date.now() - ms <= 7 * 24 * 60 * 60 * 1000) deployer.recent_trade_count! += 1;
+      }
       const tokenEntry: CreatorAggregateToken = {
         name: coin.name || "Unknown",
         symbol: coin.symbol || "UNK",
         usd_market_cap: coin.usd_market_cap || 0,
-        volume: 0,
+        volume: v24h,
         mint: coin.mint,
         description: coin.description,
         image_uri: coin.image_uri,
@@ -1478,15 +1638,34 @@ export default function AnalyticsDashboard() {
 
     const aggregated = Array.from(creatorMap.values()).map((d) => {
       d.mindshare = d.usd_market_cap / 1000;
+      d.creator_fees = creatorFeesMap[d.creator]?.totalFeesSOL ?? 0;
+      const vs = volumeSums.get(d.creator);
+      if (vs) {
+        const vol_6h_24h = Math.max(0, vs.v24h - vs.v6h);
+        const vol_1h_6h = Math.max(0, vs.v6h - vs.v1h);
+        const vol_5m_1h = Math.max(0, vs.v1h - vs.v5m);
+        const vol_5m = vs.v5m;
+        d.volumeProfile = [vol_6h_24h, vol_1h_6h, vol_5m_1h, vol_5m];
+      }
       d.top_tokens = d.top_tokens.sort((a, b) => b.usd_market_cap - a.usd_market_cap).slice(0, 5);
       d.bonded_tokens = d.bonded_tokens.sort((a, b) => (b.ath_market_cap || 0) - (a.ath_market_cap || 0));
       return d;
     });
 
+    const R_max = Math.max(1, ...aggregated.map((d) => d.total_replies ?? 0));
+    const T_max = Math.max(1, ...aggregated.map((d) => d.recent_trade_count ?? 0));
+    const P_max = Math.max(1, ...aggregated.map((d) => (d.likes_received ?? 0) + (d.mentions_received ?? 0)));
+    aggregated.forEach((d) => {
+      const r = (d.total_replies ?? 0) / R_max;
+      const t = (d.recent_trade_count ?? 0) / T_max;
+      const p = ((d.likes_received ?? 0) + (d.mentions_received ?? 0)) / P_max;
+      d.engagement = 0.4 * r + 0.4 * t + 0.2 * p;
+    });
+
     return aggregated
       .filter((d) => passesCreatorFilter(d, filters))
       .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
-  }, [allCoins, filters, profileMap]);
+  }, [allCoins, filters, profileMap, marketActivityMap, creatorFeesMap]);
 
   // Pre-load circular avatar data URIs
   useEffect(() => {
@@ -1504,6 +1683,22 @@ export default function AnalyticsDashboard() {
       if (!cancelled) setCircleAvatars(Object.fromEntries(entries));
     })();
     return () => { cancelled = true; };
+  }, [deployers]);
+
+  // Pre-compute volume ramp sparkline images per deployer at 3 sizes (scales with rectangle)
+  useEffect(() => {
+    if (deployers.length === 0) return;
+    const next: Record<string, Record<SparklineTier, string>> = {};
+    const lineColor = "rgba(255,255,255,0.7)";
+    deployers.forEach((d) => {
+      const profile = d.volumeProfile ?? [0, 0, 0, 0];
+      next[d.creator] = {
+        small: drawVolumeRampSparkline(profile, SPARKLINE_SIZES.small.width, SPARKLINE_SIZES.small.height, lineColor),
+        medium: drawVolumeRampSparkline(profile, SPARKLINE_SIZES.medium.width, SPARKLINE_SIZES.medium.height, lineColor),
+        large: drawVolumeRampSparkline(profile, SPARKLINE_SIZES.large.width, SPARKLINE_SIZES.large.height, lineColor),
+      };
+    });
+    setSparklineDataUrls(next);
   }, [deployers]);
 
   const totals = useMemo(() => ({
@@ -1540,8 +1735,8 @@ export default function AnalyticsDashboard() {
     if (chartType === "treemap" && expandedDeployer) {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
     }
-    return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars);
-  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars]);
+    return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars, sparklineDataUrls);
+  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls]);
 
   useEffect(() => {
     if (!expandingDeployer) return;
@@ -1578,11 +1773,18 @@ export default function AnalyticsDashboard() {
     setSelectedToken(t);
   }, []);
 
+  const volume24hAsOf = marketActivityFetchedAt
+    ? new Date(marketActivityFetchedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+    : null;
+  const feesAsOf = creatorFeesFetchedAt
+    ? new Date(creatorFeesFetchedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+    : null;
+
   const STAT_CARDS = [
     { label: "Deployers", value: totals.deployers.toString(), unit: "" },
-    { label: "Total Volume", value: fmtCompact(totals.volume), unit: "SOL" },
+    { label: "24h Volume", value: fmtCompact(totals.volume), unit: "USD", subtitle: volume24hAsOf ? `As of ${volume24hAsOf}` : undefined },
     { label: "Total Market Cap", value: fmtCompact(totals.marketCap), unit: "SOL" },
-    { label: "Creator Fees", value: fmtCompact(totals.fees), unit: "SOL" },
+    { label: "Creator Fees", value: fmtCompact(totals.fees), unit: "SOL", subtitle: feesAsOf ? `As of ${feesAsOf}` : undefined },
   ];
 
   if (loading) {
@@ -1604,7 +1806,7 @@ export default function AnalyticsDashboard() {
                 className="bg-clip-text text-transparent"
                 style={{ backgroundImage: "linear-gradient(135deg, #ef4444 0%, #c026d3 50%, #6366f1 100%)" }}
               >
-                Deployers
+                Active Deployers
               </span>
             </h1>
           </motion.div>
@@ -1623,6 +1825,9 @@ export default function AnalyticsDashboard() {
                   {s.value}
                   {s.unit && <span className="text-[10px] text-zinc-500 ml-0.5 font-normal">{s.unit}</span>}
                 </p>
+                {"subtitle" in s && s.subtitle && (
+                  <p className="text-[9px] text-zinc-500 mt-0.5">{s.subtitle}</p>
+                )}
               </div>
             ))}
           </motion.div>

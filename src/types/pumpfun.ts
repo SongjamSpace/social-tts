@@ -87,6 +87,13 @@ export interface CreatorAggregate {
   mentions_received?: number;
   bio?: string;
   x_username?: string;
+  /** Engagement metric components */
+  total_replies?: number;
+  recent_trade_count?: number;
+  /** 0–1 score: 0.4*replies + 0.4*recent_trades + 0.2*profile (likes+mentions), normalized */
+  engagement?: number;
+  /** Marginal volume by band [6h-24h, 1h-6h, 5m-1h, 0-5m] for ramp sparkline */
+  volumeProfile?: number[];
 }
 
 export interface PumpFunFollower {

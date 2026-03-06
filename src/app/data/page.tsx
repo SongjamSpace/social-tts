@@ -42,8 +42,10 @@ export default function DataPage() {
   useEffect(() => {
     async function fetchDeployers() {
       try {
-        const res = await fetch("https://songjamspace-leaderboard.logesh-063.workers.dev/pumpfun_2k");
-        const coins: any[] = await res.json();
+        const res = await fetch("/api/pumpfun/coins");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        const coins: any[] = json?.data ?? json;
 
         if (!Array.isArray(coins)) throw new Error("API returned unexpected format");
 
