@@ -34,6 +34,12 @@ const METRICS: { key: MetricKey; icon: React.ReactNode }[] = [
 /** Metrics not yet available — shown as disabled with "Coming soon" tooltip */
 const DISABLED_METRICS: Set<MetricKey> = new Set(["mindshare"]);
 
+/** Token Quality filters (Exclude NSFW, Exclude Banned, Min Replies, Min SOL Reserves, Min Liq. Ratio) only apply when using coin-level data. They do not affect these API-based metrics. */
+const METRICS_TOKEN_QUALITY_DISABLED: Set<MetricKey> = new Set(["bonded", "totalMarketCap", "totalAthMarketCap", "bondRate", "athEfficiency"]);
+
+/** Min Followers filter uses profile data (profileMap) which is only fetched for creators from allCoins. API-based metrics do not get this enrichment, so the filter is disabled for them. */
+const METRICS_FOLLOWERS_DISABLED: Set<MetricKey> = new Set(["bonded", "totalMarketCap", "totalAthMarketCap", "bondRate", "athEfficiency"]);
+
 /** Pump.fun creator avatar: IPFS gateway + creator address */
 const PUMP_AVATAR_BASE = "https://pump.mypinata.cloud/ipfs/";
 /** Fallback when creator avatar cannot be retrieved */
@@ -87,7 +93,7 @@ const MARKET_CAP_SLIDER_MAX = 5_000_000;
 const MARKET_CAP_SLIDER_STEP = 50_000;
 const ATH_MARKET_CAP_SLIDER_MAX = 10_000_000;
 const ATH_MARKET_CAP_SLIDER_STEP = 100_000;
-const TOKEN_COUNT_SLIDER_MAX = 100;
+const TOKEN_COUNT_SLIDER_MAX = 10_000;
 const BOND_RATE_SLIDER_MAX = 100;
 const FOLLOWERS_SLIDER_MAX = 10_000;
 const FOLLOWERS_SLIDER_STEP = 100;
@@ -221,7 +227,47 @@ function passesCoinFilter(coin: any, f: CoinFilters): boolean {
   return true;
 }
 
+function tokenPassesDateFilters(t: { created_timestamp?: number; last_trade_timestamp?: number }, f: CoinFilters): boolean {
+  if (f.createdAfter) {
+    const raw = t.created_timestamp ?? 0;
+    const tsMs = raw > 1e12 ? raw : raw * 1000;
+    if (tsMs < new Date(f.createdAfter).getTime()) return false;
+  }
+  if (f.lastTradedAfter) {
+    const raw = t.last_trade_timestamp ?? 0;
+    const tsMs = raw > 1e12 ? raw : raw * 1000;
+    if (tsMs < new Date(f.lastTradedAfter).getTime()) return false;
+  }
+  return true;
+}
+
+/** True if this token's ATH and current mcap fall within the filter ranges (when set). Used to find creators that have at least one token in range. */
+function tokenPassesMarketCapFilters(t: { ath_market_cap?: number; usd_market_cap?: number }, f: CoinFilters): boolean {
+  const ath = t.ath_market_cap ?? t.usd_market_cap ?? 0;
+  const mcap = t.usd_market_cap ?? 0;
+  if (f.athMarketCapMin != null && ath < f.athMarketCapMin) return false;
+  if (f.athMarketCapMax != null && ath > f.athMarketCapMax) return false;
+  if (f.marketCapMin != null && mcap < f.marketCapMin) return false;
+  if (f.marketCapMax != null && mcap > f.marketCapMax) return false;
+  return true;
+}
+
 function passesCreatorFilter(d: CreatorAggregate, f: CoinFilters): boolean {
+  if (f.athMarketCapMin != null || f.athMarketCapMax != null || f.marketCapMin != null || f.marketCapMax != null) {
+    const tokens = [...(d.top_tokens ?? []), ...(d.bonded_tokens ?? [])];
+    const hasTokenInRange = tokens.some((t) => tokenPassesMarketCapFilters(t, f));
+    if (!hasTokenInRange) return false;
+  }
+  if (f.bondedOnly) {
+    const tokens = [...(d.top_tokens ?? []), ...(d.bonded_tokens ?? [])];
+    const hasBonded = tokens.some((t) => t.complete === true);
+    if (!hasBonded) return false;
+  }
+  if (f.notBondedOnly) {
+    const tokens = [...(d.top_tokens ?? []), ...(d.bonded_tokens ?? [])];
+    const hasNotBonded = tokens.some((t) => t.complete !== true);
+    if (!hasNotBonded) return false;
+  }
   if (f.minTokenCount != null && d.token_count < f.minTokenCount) return false;
   if (f.maxTokenCount != null && d.token_count > f.maxTokenCount) return false;
   if (f.minBondRate != null) {
@@ -233,6 +279,11 @@ function passesCreatorFilter(d: CreatorAggregate, f: CoinFilters): boolean {
     if (!avatarUrl || avatarUrl === PUMP_AVATAR_FALLBACK || avatarUrl === pumpAvatarUrl(d.creator)) return false;
   }
   if (f.minFollowers != null && (d.followers_count ?? 0) < f.minFollowers) return false;
+  if (f.createdAfter || f.lastTradedAfter) {
+    const tokens = [...(d.top_tokens ?? []), ...(d.bonded_tokens ?? [])];
+    const hasTokenPassing = tokens.some((t) => tokenPassesDateFilters(t, f));
+    if (!hasTokenPassing) return false;
+  }
   return true;
 }
 
@@ -408,7 +459,14 @@ function formatDate(ts: number | undefined): string {
   return new Date(msTs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, onBack: () => void): EChartsOption {
+type MarketActivityEntry = { volume5m: number; volume1h: number; volume6h: number; volume24h: number };
+
+function buildDrilldownOption(
+  deployer: CreatorAggregate,
+  mindshareMax: number,
+  onBack: () => void,
+  marketActivityMap?: Record<string, MarketActivityEntry>
+): EChartsOption {
   const color = deployerColor(deployer, mindshareMax);
   const tokens = drilldownTokens(deployer);
   const tokenAth = (t: CreatorAggregateToken) => t.ath_market_cap || t.usd_market_cap || 0;
@@ -534,10 +592,10 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
   });
 
   const metricsTop = socialsTop + 26;
-  const cardsPerRow = 4;
-  const cardW = 120;
+  const cardsPerRow = 5;
+  const cardW = 92;
   const cardH = 46;
-  const cardGap = 10;
+  const cardGap = 8;
   metrics.forEach((m, i) => {
     const col = i % cardsPerRow;
     const row = Math.floor(i / cardsPerRow);
@@ -663,7 +721,7 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
 
     panelChildren.push({
       type: "text", left: 320, top: 10,
-      style: { text: "PRICE PERFORMANCE (simulated)", fill: "rgba(255,255,255,0.25)", fontSize: 8, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: 0.8 },
+      style: { text: "24H VOLUME", fill: "rgba(255,255,255,0.25)", fontSize: 8, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: 0.8 },
     });
 
     // Panel background
@@ -687,8 +745,19 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
     });
   }
 
-  const dummyCurve = latest ? generateDummyPriceCurve(latest.usd_market_cap || 0, latest.ath_market_cap || latest.usd_market_cap || 0) : [];
-  const dummyDays = dummyCurve.map((_, i) => `D${i + 1}`);
+  // Volume ramp for latest token (same 4 bands as treemap sparklines): [6h→24h, 1h→6h, 5m→1h, 5m]
+  const latestMint = latest?.mint;
+  const act = latestMint && marketActivityMap ? marketActivityMap[latestMint] : undefined;
+  const volumeProfile = act
+    ? [
+        Math.max(0, act.volume24h - act.volume6h),
+        Math.max(0, act.volume6h - act.volume1h),
+        Math.max(0, act.volume1h - act.volume5m),
+        act.volume5m,
+      ]
+    : [0, 0, 0, 0];
+  const volumeLabels = ["6h→24h", "1h→6h", "5m→1h", "5m"];
+  const hasVolume = volumeProfile.some((v) => v > 0);
   const latestAthVal = latest ? (latest.ath_market_cap || latest.usd_market_cap || 0) : 0;
   const latestMcapVal = latest ? (latest.usd_market_cap || 0) : 0;
   const sparkHealthRatio = latestAthVal > 0 ? latestMcapVal / latestAthVal : 0;
@@ -719,7 +788,8 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
         ...TOOLTIP_BASE,
         formatter: (params: any) => {
           if (params.seriesIndex === 1) {
-            return `<span style="font-family:'JetBrains Mono',monospace;font-size:11px">$${fmtCompact(params.value)}</span>`;
+            const band = volumeLabels[params.dataIndex];
+            return `<span style="font-family:'DM Sans',sans-serif;font-size:11px">${band}</span><br/><span style="font-family:'JetBrains Mono',monospace;font-size:11px">$${fmtCompact(params.value)}</span>`;
           }
           return "";
         },
@@ -740,7 +810,7 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
       {
         type: "category" as const,
         gridIndex: 1,
-        data: dummyDays,
+        data: volumeLabels,
         show: false,
       },
     ],
@@ -804,11 +874,12 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
         id: "sparkline",
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: dummyCurve,
+        data: volumeProfile,
         smooth: true,
-        showSymbol: false,
+        showSymbol: hasVolume,
+        symbolSize: 6,
         lineStyle: { color: sparkColor, width: 1.5 },
-        areaStyle: {
+        areaStyle: hasVolume ? {
           color: {
             type: "linear" as const,
             x: 0, y: 0, x2: 0, y2: 1,
@@ -817,7 +888,7 @@ function buildDrilldownOption(deployer: CreatorAggregate, mindshareMax: number, 
               { offset: 1, color: sparkColor.replace(")", ",0.02)").replace("rgb", "rgba") },
             ],
           },
-        },
+        } : undefined,
         animationDuration: 1000,
         animationDelay: 600,
         z: 90,
@@ -2334,10 +2405,10 @@ export default function AnalyticsDashboard() {
       return buildSplitOption(splittingDeployer, mindshareMax);
     }
     if (chartType === "treemap" && expandedDeployer) {
-      return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
+      return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack, marketActivityMap);
     }
     return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars, sparklineDataUrls);
-  }, [introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls]);
+  }, [introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls, marketActivityMap]);
 
   // Start intro-end timeout only once chart is ready so the particle option is actually painted before we switch to treemap
   useEffect(() => {
@@ -2607,54 +2678,75 @@ export default function AnalyticsDashboard() {
                   </div>
                 </div>
 
-                {/* --- Token Quality --- */}
-                <div className="mb-4">
-                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Token Quality</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2">
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input type="checkbox" checked={filters.excludeNsfw} onChange={(e) => updateFilter("excludeNsfw", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
-                      <span className="text-zinc-400">Exclude NSFW</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input type="checkbox" checked={filters.excludeBanned} onChange={(e) => updateFilter("excludeBanned", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
-                      <span className="text-zinc-400">Exclude Banned</span>
-                    </label>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <label className="block">
-                      <span className="text-zinc-500">Min Replies</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={filters.minReplyCount ?? ""}
-                        onChange={(e) => updateFilter("minReplyCount", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Min SOL Reserves</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="0"
-                        value={filters.minRealSolReserves ?? ""}
-                        onChange={(e) => updateFilter("minRealSolReserves", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Min Liq. Ratio</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0"
-                        value={filters.minLiquidityRatio ?? ""}
-                        onChange={(e) => updateFilter("minLiquidityRatio", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                  </div>
-                </div>
+                {/* --- Token Quality (only applies when metric uses coin-level data; disabled for Bonded, Total Market Cap, etc.) --- */}
+                {(() => {
+                  const tokenQualityDisabled = METRICS_TOKEN_QUALITY_DISABLED.has(metric);
+                  const tokenQualityTooltip = "Token Quality filters only apply to Total Volume, Followers, Engagement, and Total Creator Fees";
+                  return (
+                    <div className={`mb-4 relative ${tokenQualityDisabled ? "opacity-50" : ""}`}>
+                      {tokenQualityDisabled && (
+                        <div
+                          className="absolute inset-0 z-10 cursor-not-allowed"
+                          title={tokenQualityTooltip}
+                          aria-label={tokenQualityTooltip}
+                        />
+                      )}
+                      <div className={tokenQualityDisabled ? "pointer-events-none" : ""}>
+                      <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
+                        Token Quality
+                        {tokenQualityDisabled && <span className="normal-case font-normal text-zinc-600 ml-1">(not available for this metric)</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" checked={filters.excludeNsfw} onChange={(e) => updateFilter("excludeNsfw", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" disabled={tokenQualityDisabled} />
+                          <span className="text-zinc-400">Exclude NSFW</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" checked={filters.excludeBanned} onChange={(e) => updateFilter("excludeBanned", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" disabled={tokenQualityDisabled} />
+                          <span className="text-zinc-400">Exclude Banned</span>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="block">
+                          <span className="text-zinc-500">Min Replies</span>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={filters.minReplyCount ?? ""}
+                            onChange={(e) => updateFilter("minReplyCount", e.target.value ? Number(e.target.value) : null)}
+                            className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                            disabled={tokenQualityDisabled}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-zinc-500">Min SOL Reserves</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            placeholder="0"
+                            value={filters.minRealSolReserves ?? ""}
+                            onChange={(e) => updateFilter("minRealSolReserves", e.target.value ? Number(e.target.value) : null)}
+                            className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                            disabled={tokenQualityDisabled}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-zinc-500">Min Liq. Ratio</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="0"
+                            value={filters.minLiquidityRatio ?? ""}
+                            onChange={(e) => updateFilter("minLiquidityRatio", e.target.value ? Number(e.target.value) : null)}
+                            className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                            disabled={tokenQualityDisabled}
+                          />
+                        </label>
+                      </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* --- Creator --- */}
                 <div>
@@ -2693,21 +2785,37 @@ export default function AnalyticsDashboard() {
                         className="w-full h-2 rounded-full appearance-none bg-white/10 accent-amber-500"
                       />
                     </div>
-                    <div>
-                      <div className="flex justify-between text-zinc-500 mb-1.5">
-                        <span>Min Followers</span>
-                        <span className="font-mono text-white text-[10px]">{filters.minFollowers == null ? "Any" : fmtCompact(filters.minFollowers)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={FOLLOWERS_SLIDER_MAX}
-                        step={FOLLOWERS_SLIDER_STEP}
-                        value={filters.minFollowers ?? 0}
-                        onChange={(e) => updateFilter("minFollowers", e.target.valueAsNumber === 0 ? null : e.target.valueAsNumber)}
-                        className="w-full h-2 rounded-full appearance-none bg-white/10 accent-amber-500"
-                      />
-                    </div>
+                    {(() => {
+                      const followersDisabled = METRICS_FOLLOWERS_DISABLED.has(metric);
+                      const followersTooltip = "Follower count is only available for Total Volume, Followers, Engagement, and Total Creator Fees. Not yet available for this metric.";
+                      return (
+                        <div className={`relative ${followersDisabled ? "opacity-50" : ""}`}>
+                          {followersDisabled && (
+                            <div
+                              className="absolute inset-0 z-10 cursor-not-allowed"
+                              title={followersTooltip}
+                              aria-label={followersTooltip}
+                            />
+                          )}
+                          <div className={followersDisabled ? "pointer-events-none" : ""}>
+                            <div className="flex justify-between text-zinc-500 mb-1.5">
+                              <span>Min Followers{followersDisabled && <span className="normal-case font-normal text-zinc-600 ml-1">(not available for this metric)</span>}</span>
+                              <span className="font-mono text-white text-[10px]">{filters.minFollowers == null ? "Any" : fmtCompact(filters.minFollowers)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={FOLLOWERS_SLIDER_MAX}
+                              step={FOLLOWERS_SLIDER_STEP}
+                              value={filters.minFollowers ?? 0}
+                              onChange={(e) => updateFilter("minFollowers", e.target.valueAsNumber === 0 ? null : e.target.valueAsNumber)}
+                              className="w-full h-2 rounded-full appearance-none bg-white/10 accent-amber-500"
+                              disabled={followersDisabled}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
