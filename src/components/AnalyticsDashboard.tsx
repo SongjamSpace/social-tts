@@ -32,7 +32,7 @@ const METRICS: { key: MetricKey; icon: React.ReactNode }[] = [
 ];
 
 /** Metrics not yet available — shown as disabled with "Coming soon" tooltip */
-const DISABLED_METRICS: Set<MetricKey> = new Set(["mindshare"]);
+const DISABLED_METRICS: Set<MetricKey> = new Set(["mindshare", "totalVolume", "engagement", "totalCreatorFees"]);
 
 /** Token Quality filters (Exclude NSFW, Exclude Banned, Min Replies, Min SOL Reserves, Min Liq. Ratio) only apply when using coin-level data. They do not affect these API-based metrics. */
 const METRICS_TOKEN_QUALITY_DISABLED: Set<MetricKey> = new Set(["bonded", "totalMarketCap", "totalAthMarketCap", "bondRate", "athEfficiency"]);
@@ -1625,6 +1625,8 @@ export default function AnalyticsDashboard() {
   const [totalBondRateCreators, setTotalBondRateCreators] = useState(0);
   const [athEfficiencyData, setAthEfficiencyData] = useState<any[]>([]);
   const [totalAthEfficiencyCreators, setTotalAthEfficiencyCreators] = useState(0);
+  const [followersData, setFollowersData] = useState<any[]>([]);
+  const [totalFollowersCreators, setTotalFollowersCreators] = useState(0);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<CoinFilters>({ ...DEFAULT_FILTERS });
@@ -1805,9 +1807,39 @@ export default function AnalyticsDashboard() {
     return () => { cancelled = true; };
   }, []);
 
+  // Fetch followers creators (new high-performance endpoint)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFollowers() {
+      try {
+        const res = await fetch("/api/pumpfun/followers");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTotalFollowersCreators(json.total);
+          
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setFollowersData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch followers creators:", err);
+      }
+    }
+    fetchFollowers();
+    return () => { cancelled = true; };
+  }, []);
+
   // Fetch raw coins once (fallback/legacy for other metrics)
   useEffect(() => {
-    if (metric === "bonded" || metric === "totalMarketCap" || metric === "totalAthMarketCap" || metric === "bondRate" || metric === "athEfficiency") return;
+    if (metric === "bonded" || metric === "totalMarketCap" || metric === "totalAthMarketCap" || metric === "bondRate" || metric === "athEfficiency" || metric === "followers") return;
     let cancelled = false;
     async function fetchCoins() {
       try {
@@ -1941,6 +1973,19 @@ export default function AnalyticsDashboard() {
         }
       }
 
+      // Collect mints from followersData (new high-performance endpoint)
+      if (followersData.length > 0) {
+        for (const d of followersData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
       if (mints.length === 0) return;
 
       const capped = mints.slice(0, MARKET_ACTIVITY_MINTS_CAP);
@@ -2012,6 +2057,13 @@ export default function AnalyticsDashboard() {
         });
       }
 
+      // Collect creators from followersData
+      if (followersData.length > 0) {
+        followersData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
       const addresses = Array.from(creators);
       if (addresses.length === 0) return;
       
@@ -2040,6 +2092,42 @@ export default function AnalyticsDashboard() {
     if (metric === "bonded") {
       // Enrich bondedData with volume and volumeProfile from marketActivityMap
       return bondedData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
+    }
+
+    if (metric === "followers") {
+      // Enrich followersData with volume and volumeProfile from marketActivityMap
+      return followersData.map((d: any) => {
         const tokens = d.top_tokens || [];
         let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
         let hasActivity = false;
@@ -2368,6 +2456,7 @@ export default function AnalyticsDashboard() {
     else if (metric === "totalAthMarketCap") deployersCount = totalTotalAthMarketCapCreators;
     else if (metric === "bondRate") deployersCount = totalBondRateCreators;
     else if (metric === "athEfficiency") deployersCount = totalAthEfficiencyCreators;
+    else if (metric === "followers") deployersCount = totalFollowersCreators;
 
     return {
       deployers: deployersCount,

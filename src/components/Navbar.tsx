@@ -100,12 +100,6 @@ export default function Navbar() {
             )}
           </div>
 
-          <button
-            type="button"
-            className="ml-3 px-4 py-1.5 text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 border border-violet-400/60 rounded-lg transition-colors"
-          >
-            Log in
-          </button>
         </div>
       </div>
     </nav>
