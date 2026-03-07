@@ -1413,6 +1413,16 @@ function TokenDetailPanel({ token, onClose }: { token: CreatorAggregateToken | n
 
 export default function AnalyticsDashboard() {
   const [allCoins, setAllCoins] = useState<any[]>([]);
+  const [bondedData, setBondedData] = useState<any[]>([]);
+  const [totalBondedCreators, setTotalBondedCreators] = useState(0);
+  const [totalMarketCapData, setTotalMarketCapData] = useState<any[]>([]);
+  const [totalTotalMarketCapCreators, setTotalTotalMarketCapCreators] = useState(0);
+  const [totalAthMarketCapData, setTotalAthMarketCapData] = useState<any[]>([]);
+  const [totalTotalAthMarketCapCreators, setTotalTotalAthMarketCapCreators] = useState(0);
+  const [bondRateData, setBondRateData] = useState<any[]>([]);
+  const [totalBondRateCreators, setTotalBondRateCreators] = useState(0);
+  const [athEfficiencyData, setAthEfficiencyData] = useState<any[]>([]);
+  const [totalAthEfficiencyCreators, setTotalAthEfficiencyCreators] = useState(0);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<CoinFilters>({ ...DEFAULT_FILTERS });
@@ -1437,8 +1447,163 @@ export default function AnalyticsDashboard() {
     setFilters((prev) => ({ ...prev, [key]: val }));
   }, []);
 
-  // Fetch raw coins once (via cached server-side proxy)
+  // Fetch bonded creators (new high-performance endpoint)
   useEffect(() => {
+    let cancelled = false;
+    async function fetchBonded() {
+      try {
+        const res = await fetch("/api/pumpfun/bonded");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          // Use total count from server, and data is already sliced to 50
+          setTotalBondedCreators(json.total);
+          
+          // Map data to ensure mindshare and profiles are present for coloring/sparklines
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setBondedData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch bonded creators:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchBonded();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch total market cap creators (new high-performance endpoint)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTotalMarketCap() {
+      try {
+        const res = await fetch("/api/pumpfun/total-market-cap");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTotalTotalMarketCapCreators(json.total);
+          
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setTotalMarketCapData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch total market cap creators:", err);
+      }
+    }
+    fetchTotalMarketCap();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch total ATH market cap creators (new high-performance endpoint)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTotalAthMarketCap() {
+      try {
+        const res = await fetch("/api/pumpfun/total-ath-market-cap");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTotalTotalAthMarketCapCreators(json.total);
+          
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setTotalAthMarketCapData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch total ATH market cap creators:", err);
+      }
+    }
+    fetchTotalAthMarketCap();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch bond rate creators (new high-performance endpoint)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchBondRate() {
+      try {
+        const res = await fetch("/api/pumpfun/bond-rate");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTotalBondRateCreators(json.total);
+          
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setBondRateData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch bond rate creators:", err);
+      }
+    }
+    fetchBondRate();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch ATH Efficiency creators (new high-performance endpoint)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchAthEfficiency() {
+      try {
+        const res = await fetch("/api/pumpfun/ath-efficiency");
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTotalAthEfficiencyCreators(json.total);
+          
+          const processedData = json.data.map((d: any) => ({
+            ...d,
+            mindshare: d.mindshare ?? (d.usd_market_cap ?? 0) / 1000,
+            volume: d.volume ?? 0,
+            volumeProfile: d.volumeProfile ?? [0, 0, 0, 0],
+            top_tokens: d.top_tokens || [],
+            bonded_tokens: d.bonded_tokens || [],
+          }));
+          
+          setAthEfficiencyData(processedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch ATH efficiency creators:", err);
+      }
+    }
+    fetchAthEfficiency();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch raw coins once (fallback/legacy for other metrics)
+  useEffect(() => {
+    if (metric === "bonded" || metric === "totalMarketCap" || metric === "totalAthMarketCap" || metric === "bondRate" || metric === "athEfficiency") return;
     let cancelled = false;
     async function fetchCoins() {
       try {
@@ -1455,7 +1620,7 @@ export default function AnalyticsDashboard() {
     }
     fetchCoins();
     return () => { cancelled = true; };
-  }, []);
+  }, [metric]);
 
   // Enrich with profiles (non-blocking, runs once after coins arrive)
   useEffect(() => {
@@ -1486,25 +1651,95 @@ export default function AnalyticsDashboard() {
     return () => { cancelled = true; };
   }, [allCoins]);
 
-  // Fetch 24h volume (market-activity) for all coins after they load.
-  // Send mints in "active first" order (by last_trade_timestamp) so rate limits hit less critical coins.
+  // Fetch 24h volume (market-activity) for all coins OR bonded tokens after they load.
   useEffect(() => {
-    if (allCoins.length === 0) return;
     let cancelled = false;
     (async () => {
-      const sorted = [...allCoins].sort(
-        (a: any, b: any) => (b.last_trade_timestamp ?? 0) - (a.last_trade_timestamp ?? 0)
-      );
       const seen = new Set<string>();
       const mints: string[] = [];
-      for (const c of sorted) {
-        const mint = c.mint;
-        if (!mint || seen.has(mint)) continue;
-        seen.add(mint);
-        mints.push(mint);
+
+      // Collect mints from allCoins (legacy/other metrics)
+      if (allCoins.length > 0) {
+        const sorted = [...allCoins].sort(
+          (a: any, b: any) => (b.last_trade_timestamp ?? 0) - (a.last_trade_timestamp ?? 0)
+        );
+        for (const c of sorted) {
+          if (c.mint && !seen.has(c.mint)) {
+            seen.add(c.mint);
+            mints.push(c.mint);
+          }
+        }
       }
+
+      // Collect mints from bondedData (new high-performance endpoint)
+      if (bondedData.length > 0) {
+        // Collect mints from top_tokens of bonded creators
+        for (const d of bondedData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
+      // Collect mints from totalMarketCapData (new high-performance endpoint)
+      if (totalMarketCapData.length > 0) {
+        for (const d of totalMarketCapData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
+      // Collect mints from totalAthMarketCapData (new high-performance endpoint)
+      if (totalAthMarketCapData.length > 0) {
+        for (const d of totalAthMarketCapData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
+      // Collect mints from bondRateData (new high-performance endpoint)
+      if (bondRateData.length > 0) {
+        for (const d of bondRateData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
+      // Collect mints from athEfficiencyData (new high-performance endpoint)
+      if (athEfficiencyData.length > 0) {
+        for (const d of athEfficiencyData) {
+          const tokens = d.top_tokens || [];
+          for (const t of tokens) {
+            if (t.mint && !seen.has(t.mint)) {
+              seen.add(t.mint);
+              mints.push(t.mint);
+            }
+          }
+        }
+      }
+
+      if (mints.length === 0) return;
+
       const capped = mints.slice(0, MARKET_ACTIVITY_MINTS_CAP);
-      if (capped.length === 0) return;
       try {
         const res = await fetch("/api/pumpfun/market-activity", {
           method: "POST",
@@ -1515,7 +1750,7 @@ export default function AnalyticsDashboard() {
         const { marketActivity, fetchedAt } = await res.json();
         if (cancelled) return;
         if (marketActivity && typeof fetchedAt === "number") {
-          setMarketActivityMap(marketActivity);
+          setMarketActivityMap((prev) => ({ ...prev, ...marketActivity }));
           setMarketActivityFetchedAt(fetchedAt);
         }
       } catch (err) {
@@ -1523,17 +1758,59 @@ export default function AnalyticsDashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, [allCoins]);
+  }, [allCoins, bondedData]);
 
-  // Fetch creator fees for all creators after coins load
+  // Fetch creator fees for all creators (legacy OR bonded) after data loads
   useEffect(() => {
-    if (allCoins.length === 0) return;
     let cancelled = false;
     (async () => {
       const creators = new Set<string>();
-      allCoins.forEach((c: any) => { if (c.creator && c.creator !== "11111111111111111111111111111111") creators.add(c.creator); });
+      
+      // Collect creators from allCoins
+      if (allCoins.length > 0) {
+        allCoins.forEach((c: any) => { 
+          if (c.creator && c.creator !== "11111111111111111111111111111111") creators.add(c.creator); 
+        });
+      }
+
+      // Collect creators from bondedData
+      if (bondedData.length > 0) {
+        bondedData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
+      // Collect creators from totalMarketCapData
+      if (totalMarketCapData.length > 0) {
+        totalMarketCapData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
+      // Collect creators from totalAthMarketCapData
+      if (totalAthMarketCapData.length > 0) {
+        totalAthMarketCapData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
+      // Collect creators from bondRateData
+      if (bondRateData.length > 0) {
+        bondRateData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
+      // Collect creators from athEfficiencyData
+      if (athEfficiencyData.length > 0) {
+        athEfficiencyData.forEach((d: any) => {
+          if (d.creator && d.creator !== "11111111111111111111111111111111") creators.add(d.creator);
+        });
+      }
+
       const addresses = Array.from(creators);
       if (addresses.length === 0) return;
+      
       try {
         const res = await fetch("/api/pumpfun/creator-fees", {
           method: "POST",
@@ -1544,7 +1821,7 @@ export default function AnalyticsDashboard() {
         const { fees, fetchedAt } = await res.json();
         if (cancelled) return;
         if (fees && typeof fetchedAt === "number") {
-          setCreatorFeesMap(fees);
+          setCreatorFeesMap((prev) => ({ ...prev, ...fees }));
           setCreatorFeesFetchedAt(fetchedAt);
         }
       } catch (err) {
@@ -1552,10 +1829,179 @@ export default function AnalyticsDashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, [allCoins]);
+  }, [allCoins, bondedData]);
 
   // Reactive aggregation: filter coins -> aggregate -> filter creators
   const deployers = useMemo(() => {
+    if (metric === "bonded") {
+      // Enrich bondedData with volume and volumeProfile from marketActivityMap
+      return bondedData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      });
+    }
+
+    if (metric === "totalMarketCap") {
+      // Enrich totalMarketCapData with volume and volumeProfile from marketActivityMap
+      return totalMarketCapData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      });
+    }
+
+    if (metric === "totalAthMarketCap") {
+      // Enrich totalAthMarketCapData with volume and volumeProfile from marketActivityMap
+      return totalAthMarketCapData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      });
+    }
+
+    if (metric === "athEfficiency") {
+      // Enrich athEfficiencyData with volume and volumeProfile from marketActivityMap
+      return athEfficiencyData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      });
+    }
+
+    if (metric === "bondRate") {
+      // Enrich bondRateData with volume and volumeProfile from marketActivityMap
+      return bondRateData.map((d: any) => {
+        const tokens = d.top_tokens || [];
+        let v5m = 0, v1h = 0, v6h = 0, v24h = 0;
+        let hasActivity = false;
+        
+        tokens.forEach((t: any) => {
+          const act = marketActivityMap[t.mint];
+          if (act) {
+            v5m += act.volume5m || 0;
+            v1h += act.volume1h || 0;
+            v6h += act.volume6h || 0;
+            v24h += act.volume24h || 0;
+            hasActivity = true;
+          }
+        });
+
+        const profile = hasActivity ? [
+          Math.max(0, v24h - v6h),
+          Math.max(0, v6h - v1h),
+          Math.max(0, v1h - v5m),
+          v5m
+        ] : (d.volumeProfile || [0, 0, 0, 0]);
+
+        return {
+          ...d,
+          volume: hasActivity ? v24h : (d.volume || 0),
+          volumeProfile: profile,
+          creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
+        };
+      });
+    }
     if (allCoins.length === 0) return [];
     const filtered = allCoins.filter((coin) => {
       const c = coin.creator;
@@ -1665,7 +2111,7 @@ export default function AnalyticsDashboard() {
     return aggregated
       .filter((d) => passesCreatorFilter(d, filters))
       .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
-  }, [allCoins, filters, profileMap, marketActivityMap, creatorFeesMap]);
+  }, [allCoins, bondedData, filters, metric, profileMap, marketActivityMap, creatorFeesMap]);
 
   // Pre-load circular avatar data URIs
   useEffect(() => {
@@ -1701,12 +2147,21 @@ export default function AnalyticsDashboard() {
     setSparklineDataUrls(next);
   }, [deployers]);
 
-  const totals = useMemo(() => ({
-    deployers: deployers.length,
-    volume: deployers.reduce((s, d) => s + (d.volume ?? 0), 0),
-    marketCap: deployers.reduce((s, d) => s + (d.usd_market_cap ?? 0), 0),
-    fees: deployers.reduce((s, d) => s + (d.creator_fees ?? 0), 0),
-  }), [deployers]);
+  const totals = useMemo(() => {
+    let deployersCount = deployers.length;
+    if (metric === "bonded") deployersCount = totalBondedCreators;
+    else if (metric === "totalMarketCap") deployersCount = totalTotalMarketCapCreators;
+    else if (metric === "totalAthMarketCap") deployersCount = totalTotalAthMarketCapCreators;
+    else if (metric === "bondRate") deployersCount = totalBondRateCreators;
+    else if (metric === "athEfficiency") deployersCount = totalAthEfficiencyCreators;
+
+    return {
+      deployers: deployersCount,
+      volume: deployers.reduce((s, d) => s + (d.volume ?? 0), 0),
+      marketCap: deployers.reduce((s, d) => s + (d.usd_market_cap ?? 0), 0),
+      fees: deployers.reduce((s, d) => s + (d.creator_fees ?? 0), 0),
+    };
+  }, [deployers, metric, totalBondedCreators, totalTotalMarketCapCreators]);
 
   const mindshareMax = useMemo(() => Math.max(1, ...deployers.map((d) => d.mindshare)), [deployers]);
 
