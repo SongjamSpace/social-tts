@@ -82,6 +82,91 @@ const DEFAULT_FILTERS: CoinFilters = {
   minFollowers: null,
 };
 
+// Slider ranges for filter panel
+const MARKET_CAP_SLIDER_MAX = 5_000_000;
+const MARKET_CAP_SLIDER_STEP = 50_000;
+const ATH_MARKET_CAP_SLIDER_MAX = 10_000_000;
+const ATH_MARKET_CAP_SLIDER_STEP = 100_000;
+const TOKEN_COUNT_SLIDER_MAX = 100;
+const BOND_RATE_SLIDER_MAX = 100;
+const FOLLOWERS_SLIDER_MAX = 10_000;
+const FOLLOWERS_SLIDER_STEP = 100;
+
+const DUAL_RANGE_CSS = `
+.dual-range { position: relative; height: 8px; }
+.dual-range .track { position: absolute; inset: 0; border-radius: 9999px; background: rgba(255,255,255,0.1); }
+.dual-range .fill { position: absolute; height: 100%; border-radius: 9999px; background: #f59e0b; }
+.dual-range input[type="range"] {
+  position: absolute; width: 100%; top: 0; height: 8px; margin: 0; padding: 0;
+  -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; z-index: 2;
+}
+.dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+  background: #f59e0b; border: 2px solid #111113; cursor: pointer; pointer-events: all;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+}
+.dual-range input[type="range"]::-moz-range-thumb {
+  height: 16px; width: 16px; border-radius: 50%;
+  background: #f59e0b; border: 2px solid #111113; cursor: pointer; pointer-events: all;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+}
+`;
+
+function DualRangeSlider({ label, min, max, step, valueMin, valueMax, defaultMin, defaultMax, formatValue, onChange }: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  valueMin: number | null;
+  valueMax: number | null;
+  defaultMin: number;
+  defaultMax: number;
+  formatValue: (v: number | null, isMax: boolean) => string;
+  onChange: (lo: number | null, hi: number | null) => void;
+}) {
+  const lo = valueMin ?? defaultMin;
+  const hi = valueMax ?? defaultMax;
+  const leftPct = ((lo - min) / (max - min)) * 100;
+  const rightPct = 100 - ((hi - min) / (max - min)) * 100;
+
+  return (
+    <div className="mb-1">
+      <div className="flex justify-between text-zinc-500 mb-1.5">
+        <span>{label}</span>
+        <span className="font-mono text-white text-[10px]">
+          {formatValue(valueMin, false)} – {formatValue(valueMax, true)}
+        </span>
+      </div>
+      <div className="dual-range">
+        <div className="track" />
+        <div className="fill" style={{ left: `${leftPct}%`, right: `${rightPct}%` }} />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={lo}
+          onChange={(e) => {
+            const v = e.target.valueAsNumber;
+            onChange(v <= defaultMin ? null : v, valueMax);
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={hi}
+          onChange={(e) => {
+            const v = e.target.valueAsNumber;
+            onChange(valueMin, v >= defaultMax ? null : v);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function countActiveFilters(f: CoinFilters): number {
   let n = 0;
   if (f.athMarketCapMin != null) n++;
@@ -143,7 +228,10 @@ function passesCreatorFilter(d: CreatorAggregate, f: CoinFilters): boolean {
     const rate = d.token_count > 0 ? (d.bonded / d.token_count) * 100 : 0;
     if (rate < f.minBondRate) return false;
   }
-  if (f.hasPfpOnly && (!d.profile_image || d.profile_image === PUMP_AVATAR_FALLBACK)) return false;
+  if (f.hasPfpOnly) {
+    const avatarUrl = d.profile_image ?? d.avatar_url;
+    if (!avatarUrl || avatarUrl === PUMP_AVATAR_FALLBACK || avatarUrl === pumpAvatarUrl(d.creator)) return false;
+  }
   if (f.minFollowers != null && (d.followers_count ?? 0) < f.minFollowers) return false;
   return true;
 }
@@ -842,6 +930,46 @@ function buildSplitOption(deployer: CreatorAggregate, mindshareMax: number): ECh
   };
 }
 
+function buildParticleOption(mindshareMax: number, deployers: CreatorAggregate[]): EChartsOption {
+  const centerX = 500;
+  const centerY = 500;
+  const data: { value: [number, number]; groupId: string; itemStyle: { color: string } }[] = [];
+  const particlesPerDeployer = Math.max(6, Math.min(10, Math.floor(200 / Math.max(1, deployers.length))));
+  deployers.forEach((d) => {
+    const color = deployerColor(d, mindshareMax);
+    for (let i = 0; i < particlesPerDeployer; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 80 + Math.random() * 320;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      data.push({
+        value: [x, y],
+        groupId: d.creator,
+        itemStyle: { color },
+      });
+    }
+  });
+  return {
+    animation: true,
+    animationDuration: 800,
+    animationEasing: "cubicOut",
+    animationDelay: (idx: number) => idx * 2,
+    backgroundColor: "#060608",
+    tooltip: { show: false },
+    xAxis: { type: "value", min: 0, max: 1000, show: false },
+    yAxis: { type: "value", min: 0, max: 1000, show: false },
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
+    series: [{
+      type: "scatter",
+      id: "tokens",
+      universalTransition: { enabled: true },
+      coordinateSystem: "cartesian2d",
+      data,
+      symbolSize: 5,
+    }],
+  };
+}
+
 function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[], circleAvatars?: Record<string, string>, sparklineDataUrls?: Record<string, Record<SparklineTier, string>>): EChartsOption {
   const unit = METRIC_UNITS[metric];
   
@@ -1205,7 +1333,7 @@ const ECHARTS_MODULES: Record<ChartType, () => Promise<any[]>> = {
   },
 };
 
-function EChartsWrapper({ option, chartType, onChartClick, onTokenClick }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void; onTokenClick?: (t: CreatorAggregateToken) => void }) {
+function EChartsWrapper({ option, chartType, onChartClick, onTokenClick, onChartReady }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void; onTokenClick?: (t: CreatorAggregateToken) => void; onChartReady?: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -1214,6 +1342,8 @@ function EChartsWrapper({ option, chartType, onChartClick, onTokenClick }: { opt
   onChartClickRef.current = onChartClick;
   const onTokenClickRef = useRef(onTokenClick);
   onTokenClickRef.current = onTokenClick;
+  const onChartReadyRef = useRef(onChartReady);
+  onChartReadyRef.current = onChartReady;
 
   useEffect(() => {
     let cancelled = false;
@@ -1233,6 +1363,7 @@ function EChartsWrapper({ option, chartType, onChartClick, onTokenClick }: { opt
       if (cancelled) return;
       echartsRef.current = echartsCore;
       setReady(true);
+      onChartReadyRef.current?.();
     })();
     return () => { cancelled = true; };
   }, []);
@@ -1433,6 +1564,8 @@ export default function AnalyticsDashboard() {
   const [expandingDeployer, setExpandingDeployer] = useState<CreatorAggregate | null>(null);
   const [splittingDeployer, setSplittingDeployer] = useState<CreatorAggregate | null>(null);
   const [expandedDeployer, setExpandedDeployer] = useState<CreatorAggregate | null>(null);
+  const [introPlaying, setIntroPlaying] = useState(true);
+  const [chartReady, setChartReady] = useState(false);
   const [selectedToken, setSelectedToken] = useState<CreatorAggregateToken | null>(null);
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [circleAvatars, setCircleAvatars] = useState<Record<string, string>>({});
@@ -1864,7 +1997,9 @@ export default function AnalyticsDashboard() {
           volumeProfile: profile,
           creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
         };
-      });
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
     }
 
     if (metric === "totalMarketCap") {
@@ -1898,7 +2033,9 @@ export default function AnalyticsDashboard() {
           volumeProfile: profile,
           creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
         };
-      });
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
     }
 
     if (metric === "totalAthMarketCap") {
@@ -1932,7 +2069,9 @@ export default function AnalyticsDashboard() {
           volumeProfile: profile,
           creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
         };
-      });
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
     }
 
     if (metric === "athEfficiency") {
@@ -1966,7 +2105,9 @@ export default function AnalyticsDashboard() {
           volumeProfile: profile,
           creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
         };
-      });
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
     }
 
     if (metric === "bondRate") {
@@ -2000,7 +2141,9 @@ export default function AnalyticsDashboard() {
           volumeProfile: profile,
           creator_fees: creatorFeesMap[d.creator]?.totalFeesSOL ?? d.creator_fees ?? 0
         };
-      });
+      })
+      .filter((d) => passesCreatorFilter(d, filters))
+      .sort((a, b) => b.usd_market_cap - a.usd_market_cap);
     }
     if (allCoins.length === 0) return [];
     const filtered = allCoins.filter((coin) => {
@@ -2181,6 +2324,9 @@ export default function AnalyticsDashboard() {
 
   const option = useMemo(() => {
     if (deployers.length === 0) return {};
+    if (introPlaying && chartType === "treemap") {
+      return buildParticleOption(mindshareMax, deployers);
+    }
     if (chartType === "treemap" && expandingDeployer) {
       return buildExpandOption(expandingDeployer, mindshareMax);
     }
@@ -2191,7 +2337,14 @@ export default function AnalyticsDashboard() {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack);
     }
     return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars, sparklineDataUrls);
-  }, [chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls]);
+  }, [introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls]);
+
+  // Start intro-end timeout only once chart is ready so the particle option is actually painted before we switch to treemap
+  useEffect(() => {
+    if (!chartReady || !introPlaying || deployers.length === 0 || chartType !== "treemap") return;
+    const t = setTimeout(() => setIntroPlaying(false), 1200);
+    return () => clearTimeout(t);
+  }, [chartReady, introPlaying, deployers.length, chartType]);
 
   useEffect(() => {
     if (!expandingDeployer) return;
@@ -2388,49 +2541,34 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 {/* --- Market Cap --- */}
+                <style dangerouslySetInnerHTML={{ __html: DUAL_RANGE_CSS }} />
                 <div className="mb-4">
                   <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Market Cap</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-zinc-500">ATH Min ($)</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={filters.athMarketCapMin ?? ""}
-                        onChange={(e) => updateFilter("athMarketCapMin", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">ATH Max ($)</span>
-                      <input
-                        type="number"
-                        placeholder="No limit"
-                        value={filters.athMarketCapMax ?? ""}
-                        onChange={(e) => updateFilter("athMarketCapMax", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Current Min ($)</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={filters.marketCapMin ?? ""}
-                        onChange={(e) => updateFilter("marketCapMin", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Current Max ($)</span>
-                      <input
-                        type="number"
-                        placeholder="No limit"
-                        value={filters.marketCapMax ?? ""}
-                        onChange={(e) => updateFilter("marketCapMax", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
+                  <div className="space-y-4">
+                    <DualRangeSlider
+                      label="ATH Market Cap ($)"
+                      min={0}
+                      max={ATH_MARKET_CAP_SLIDER_MAX}
+                      step={ATH_MARKET_CAP_SLIDER_STEP}
+                      valueMin={filters.athMarketCapMin}
+                      valueMax={filters.athMarketCapMax}
+                      defaultMin={0}
+                      defaultMax={ATH_MARKET_CAP_SLIDER_MAX}
+                      formatValue={(v, isMax) => v == null ? (isMax ? "No limit" : "Any") : `$${fmtCompact(v)}`}
+                      onChange={(lo, hi) => { updateFilter("athMarketCapMin", lo); updateFilter("athMarketCapMax", hi); }}
+                    />
+                    <DualRangeSlider
+                      label="Current Market Cap ($)"
+                      min={0}
+                      max={MARKET_CAP_SLIDER_MAX}
+                      step={MARKET_CAP_SLIDER_STEP}
+                      valueMin={filters.marketCapMin}
+                      valueMax={filters.marketCapMax}
+                      defaultMin={0}
+                      defaultMax={MARKET_CAP_SLIDER_MAX}
+                      formatValue={(v, isMax) => v == null ? (isMax ? "No limit" : "Any") : `$${fmtCompact(v)}`}
+                      onChange={(lo, hi) => { updateFilter("marketCapMin", lo); updateFilter("marketCapMax", hi); }}
+                    />
                   </div>
                 </div>
 
@@ -2527,48 +2665,49 @@ export default function AnalyticsDashboard() {
                       <span className="text-zinc-400">Has PFP</span>
                     </label>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-zinc-500">Min Tokens</span>
+                  <div className="space-y-4">
+                    <DualRangeSlider
+                      label="Token Count"
+                      min={0}
+                      max={TOKEN_COUNT_SLIDER_MAX}
+                      step={1}
+                      valueMin={filters.minTokenCount}
+                      valueMax={filters.maxTokenCount}
+                      defaultMin={0}
+                      defaultMax={TOKEN_COUNT_SLIDER_MAX}
+                      formatValue={(v, isMax) => v == null ? (isMax ? "No limit" : "Any") : `${v}`}
+                      onChange={(lo, hi) => { updateFilter("minTokenCount", lo); updateFilter("maxTokenCount", hi); }}
+                    />
+                    <div>
+                      <div className="flex justify-between text-zinc-500 mb-1.5">
+                        <span>Min Bond Rate (%)</span>
+                        <span className="font-mono text-white text-[10px]">{filters.minBondRate == null ? "Any" : `${filters.minBondRate}%`}</span>
+                      </div>
                       <input
-                        type="number"
-                        placeholder="0"
-                        value={filters.minTokenCount ?? ""}
-                        onChange={(e) => updateFilter("minTokenCount", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                        type="range"
+                        min={0}
+                        max={BOND_RATE_SLIDER_MAX}
+                        step={1}
+                        value={filters.minBondRate ?? 0}
+                        onChange={(e) => updateFilter("minBondRate", e.target.valueAsNumber === 0 ? null : e.target.valueAsNumber)}
+                        className="w-full h-2 rounded-full appearance-none bg-white/10 accent-amber-500"
                       />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Max Tokens</span>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-zinc-500 mb-1.5">
+                        <span>Min Followers</span>
+                        <span className="font-mono text-white text-[10px]">{filters.minFollowers == null ? "Any" : fmtCompact(filters.minFollowers)}</span>
+                      </div>
                       <input
-                        type="number"
-                        placeholder="No limit"
-                        value={filters.maxTokenCount ?? ""}
-                        onChange={(e) => updateFilter("maxTokenCount", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
+                        type="range"
+                        min={0}
+                        max={FOLLOWERS_SLIDER_MAX}
+                        step={FOLLOWERS_SLIDER_STEP}
+                        value={filters.minFollowers ?? 0}
+                        onChange={(e) => updateFilter("minFollowers", e.target.valueAsNumber === 0 ? null : e.target.valueAsNumber)}
+                        className="w-full h-2 rounded-full appearance-none bg-white/10 accent-amber-500"
                       />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Min Bond Rate (%)</span>
-                      <input
-                        type="number"
-                        step="1"
-                        placeholder="0"
-                        value={filters.minBondRate ?? ""}
-                        onChange={(e) => updateFilter("minBondRate", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-zinc-500">Min Followers</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={filters.minFollowers ?? ""}
-                        onChange={(e) => updateFilter("minFollowers", e.target.value ? Number(e.target.value) : null)}
-                        className="mt-0.5 w-full bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
-                      />
-                    </label>
+                    </div>
                   </div>
                 </div>
 
@@ -2594,6 +2733,7 @@ export default function AnalyticsDashboard() {
         <EChartsWrapper
           option={option}
           chartType={chartType}
+          onChartReady={() => setChartReady(true)}
           onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick}
           onTokenClick={expandedDeployer ? handleTokenClick : undefined}
         />
