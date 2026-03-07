@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "make-favicon": "node scripts/make-favicon.mjs",
-    "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs"
+    "make-eve-favicon": "node scripts/make-eve-favicon.mjs",
+    "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs",
+    "invert-eve-logo": "node scripts/invert-eve-logo.mjs",
+    "eve-logo-white-on-black": "node scripts/eve-logo-white-on-black.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -33,6 +36,8 @@
     "clanker-sdk": "^4.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "ethers": "^6.15.0",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.7.0",

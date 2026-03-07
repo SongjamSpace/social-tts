@@ -1,7 +1,7 @@
 "use client";
 
-import AgentsSocialPage from "@/components/AgentsSocialPage";
+import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 
-export default function AgentsPage() {
-  return <AgentsSocialPage />;
+export default function HomePage() {
+  return <AnalyticsDashboard />;
 }
