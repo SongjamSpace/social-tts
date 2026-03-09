@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const apiUrl = `https://frontend-api-v3.pump.fun/coins?offset=${offset}&limit=${limit}&sort=created_timestamp&includeNsfw=false&order=DESC`;
 
     const res = await fetch(apiUrl, {
-      next: { revalidate: 30 } // Cache for 30 seconds
+      next: { revalidate: 10 },
     });
 
     if (!res.ok) {
@@ -19,7 +19,9 @@ export async function GET(request: Request) {
 
     const data = await res.json();
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data }, {
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   } catch (error: any) {
     console.error("Error fetching live coins from PumpFun API:", error);
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
