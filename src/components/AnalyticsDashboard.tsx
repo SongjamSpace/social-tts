@@ -2,14 +2,15 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, MessageCircle, SlidersHorizontal, X } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, MessageCircle, SlidersHorizontal, X, Radio } from "lucide-react";
 import type { EChartsOption } from "echarts";
+import LivePulse from "./LivePulse";
 import {
   METRIC_LABELS,
   METRIC_UNITS,
   type MetricKey
 } from "@/lib/dummyData";
-import { type CreatorAggregate, type CreatorAggregateToken, type PumpFunCoin } from "@/types/pumpfun";
+import { type CreatorAggregate, type CreatorAggregateToken, type PumpFunCoin, type VolumeByWindow } from "@/types/pumpfun";
 import DeployerDetail from "./DeployerDetail";
 
 type ChartType = "treemap" | "bar" | "barH" | "pie" | "scatter" | "radar" | "sunburst" | "funnel" | "packed" | "line" | "heatmap";
@@ -1634,6 +1635,11 @@ export default function AnalyticsDashboard() {
   const [metric, setMetric] = useState<MetricKey>("bonded");
   const [chartType, setChartType] = useState<ChartType>("treemap");
   const [selected, setSelected] = useState<CreatorAggregate | null>(null);
+  const [viewType, setViewType] = useState<"historical" | "live">("historical");
+  const [liveCoins, setLiveCoins] = useState<PumpFunCoin[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveVelocity, setLiveVelocity] = useState(0);
+  const [liveSuccessRate, setLiveSuccessRate] = useState(0);
   const [expandingDeployer, setExpandingDeployer] = useState<CreatorAggregate | null>(null);
   const [splittingDeployer, setSplittingDeployer] = useState<CreatorAggregate | null>(null);
   const [expandedDeployer, setExpandedDeployer] = useState<CreatorAggregate | null>(null);
@@ -1643,11 +1649,12 @@ export default function AnalyticsDashboard() {
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [circleAvatars, setCircleAvatars] = useState<Record<string, string>>({});
   const [sparklineDataUrls, setSparklineDataUrls] = useState<Record<string, Record<SparklineTier, string>>>({});
-  type VolumeByWindow = { volume5m: number; volume1h: number; volume6h: number; volume24h: number };
+  const [pulseMarketActivityMap, setPulseMarketActivityMap] = useState<Record<string, VolumeByWindow>>({});
   const [marketActivityMap, setMarketActivityMap] = useState<Record<string, VolumeByWindow>>({});
   const [marketActivityFetchedAt, setMarketActivityFetchedAt] = useState<number | null>(null);
   const [creatorFeesMap, setCreatorFeesMap] = useState<Record<string, { totalFeesSOL: number }>>({});
   const [creatorFeesFetchedAt, setCreatorFeesFetchedAt] = useState<number | null>(null);
+  const [enrichedCreators, setEnrichedCreators] = useState<Record<string, CreatorAggregate>>({});
 
   const updateFilter = useCallback(<K extends keyof CoinFilters>(key: K, val: CoinFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
@@ -1886,6 +1893,181 @@ export default function AnalyticsDashboard() {
     })();
     return () => { cancelled = true; };
   }, [allCoins]);
+
+  // Combined creator map for live reputation matching - includes enriched real-time profiles
+  const knownCreatorsMap = useMemo(() => {
+    const map: Record<string, CreatorAggregate> = { ...enrichedCreators };
+    [...bondedData, ...totalMarketCapData, ...totalAthMarketCapData, ...bondRateData, ...athEfficiencyData, ...followersData].forEach(d => {
+      map[d.creator] = d;
+    });
+    return map;
+  }, [bondedData, totalMarketCapData, totalAthMarketCapData, bondRateData, athEfficiencyData, followersData, enrichedCreators]);
+
+  // Enrich creator profiles for live feed
+  useEffect(() => {
+    if (viewType !== "live" || liveCoins.length === 0) return;
+
+    const creatorsToFetch = [...new Set(liveCoins.map(c => c.creator))].filter(
+      addr => !knownCreatorsMap[addr] && !enrichedCreators[addr]
+    );
+
+    if (creatorsToFetch.length === 0) return;
+
+    // Fetch up to 5 at a time to avoid spamming
+    const batch = creatorsToFetch.slice(0, 5);
+    batch.forEach(async (addr) => {
+      try {
+        // Fetch profile and tokens in parallel
+        const [profileRes, tokensRes] = await Promise.all([
+          fetch(`/api/pumpfun/users/${addr}`),
+          fetch(`/api/pumpfun/creator-tokens/${addr}`)
+        ]);
+
+        let profileData = null;
+        let tokenStats = { total: 0, bonded: 0 };
+
+        if (profileRes.ok) {
+          const json = await profileRes.json();
+          if (json.success) profileData = json.data;
+        }
+
+        if (tokensRes.ok) {
+          const json = await tokensRes.json();
+          if (json.success) {
+            tokenStats = { total: json.total, bonded: json.bonded };
+          }
+        }
+
+        if (profileData || tokenStats.total > 0) {
+          setEnrichedCreators(prev => ({
+            ...prev,
+            [addr]: {
+              creator: addr,
+              creator_display_name: profileData?.username || addr.slice(0, 6),
+              username: profileData?.username,
+              followers_count: profileData?.followers_count,
+              following_count: profileData?.following_count,
+              profile_image: profileData?.profile_image,
+              avatar_url: profileData?.profile_image,
+              token_count: tokenStats.total,
+              bonded: tokenStats.bonded,
+              volume: 0,
+              usd_market_cap: 0,
+              total_ath_market_cap: 0,
+              creator_fees: 0,
+              mindshare: 0,
+              top_tokens: [],
+              bonded_tokens: []
+            }
+          }));
+        }
+      } catch (err) {
+        console.error(`Failed to enrich creator ${addr}:`, err);
+      }
+    });
+  }, [viewType, liveCoins, knownCreatorsMap, enrichedCreators]);
+
+  // Fetch live coins polling
+  useEffect(() => {
+    if (viewType !== "live") return;
+    
+    let cancelled = false;
+    let timer: any;
+
+    async function fetchLive() {
+      if (cancelled) return;
+      setLiveLoading(liveCoins.length === 0);
+      try {
+        const res = await fetch("/api/pumpfun/live?limit=50");
+        if (!res.ok) throw new Error("API fail");
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          const freshCoins: PumpFunCoin[] = json.data || [];
+          
+          setLiveCoins(prev => {
+            const coinMap = new Map<string, PumpFunCoin>();
+            // Add existing coins
+            prev.forEach(c => coinMap.set(c.mint, c));
+            // Add/Update with fresh coins
+            freshCoins.forEach(c => coinMap.set(c.mint, c));
+            
+            // Convert to array and sort by newest first
+            const allCoins = Array.from(coinMap.values()).sort((a, b) => {
+              const tsA = a.created_timestamp > 1e12 ? a.created_timestamp : a.created_timestamp * 1000;
+              const tsB = b.created_timestamp > 1e12 ? b.created_timestamp : b.created_timestamp * 1000;
+              return tsB - tsA;
+            });
+
+            // Limit to 250 most recent
+            return allCoins.slice(0, 250);
+          });
+          
+          // Fetch market activity for the newly arrived batch
+          const mints = freshCoins.map((c: any) => c.mint);
+          if (mints.length > 0) {
+            fetch("/api/pumpfun/market-activity", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mints })
+            })
+            .then(res => res.json())
+            .then(volData => {
+              if (!cancelled && volData.marketActivity) {
+                setPulseMarketActivityMap(prevMap => {
+                  const newMap = { ...prevMap, ...volData.marketActivity };
+                  
+                  // Re-calculate Momentum Heat based on THE ENTIRE aggregated feed
+                  // (Using functional update to get latest coins if needed, but here we use marketActivity data)
+                  // Let's actually calculate this outside or use the fresh batch for 'Heat'
+                  // The user said "Launch intensity vs average", so freshCoins is better for heat
+                  let total5m = 0;
+                  let total1h = 0;
+                  mints.forEach((m: string) => {
+                    const v = newMap[m];
+                    if (v) {
+                      total5m += v.volume5m;
+                      total1h += v.volume1h;
+                    }
+                  });
+                  
+                  const ratio = total1h > 0 ? (total5m / (total1h / 12)) * 100 : 0;
+                  setLiveVelocity(Math.min(200, Math.round(ratio)));
+
+                  return newMap;
+                });
+
+                // Calculate Bonding Pipeline (avg progress) for the ENTIRE accumulated feed
+                setLiveCoins(currentCoins => {
+                  const totalProgress = currentCoins.reduce((acc: number, c: any) => {
+                    const prog = Math.min(100, (c.usd_market_cap / 60000) * 100);
+                    return acc + (c.complete ? 100 : prog);
+                  }, 0);
+                  setLiveSuccessRate(Math.round(totalProgress / Math.max(1, currentCoins.length)));
+                  return currentCoins;
+                });
+              }
+            })
+            .catch(err => console.error("Live market activity fetch error:", err));
+          }
+          
+          // Momentum Heat: Ratio of 5m vol to 1/12th of 1h vol (intensity)
+          // Since we fetch market activity separately, we'll calculate this in another useEffect or update it when volData arrives
+        }
+      } catch (err) {
+        console.error("Live fetch error:", err);
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    }
+
+    fetchLive();
+    timer = setInterval(fetchLive, 30000); // Poll every 30s
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [viewType]);
 
   // Fetch 24h volume (market-activity) for all coins OR bonded tokens after they load.
   useEffect(() => {
@@ -2561,8 +2743,36 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#060608] text-white overflow-y-auto overflow-x-hidden">
-      {/* Controls bar */}
-      <div className="shrink-0 px-4 pt-4 pb-2">
+      {/* View Toggles - Main Navigation */}
+      <div className="shrink-0 px-4 pt-4 flex justify-center">
+        <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 w-full max-w-md">
+          <button
+            onClick={() => setViewType("historical")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-bold transition-all ${
+              viewType === "historical" 
+              ? "bg-white/10 text-white shadow-lg" 
+              : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Trophy className="w-4 h-4" /> Historical
+          </button>
+          <button
+            onClick={() => setViewType("live")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-bold transition-all ${
+              viewType === "live" 
+              ? "bg-red-500/20 text-red-500 shadow-lg" 
+              : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Radio className="w-4 h-4" /> Live Coins
+          </button>
+        </div>
+      </div>
+
+      {viewType === "historical" ? (
+        <>
+          {/* Controls bar */}
+          <div className="shrink-0 px-4 pt-4 pb-2">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <h1
@@ -2920,21 +3130,48 @@ export default function AnalyticsDashboard() {
         </motion.div>
       </div>
 
-      {/* Chart — fills remaining viewport */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.15 }}
-        className="flex-1 min-h-[200px] mx-2 mb-2 rounded-2xl border border-white/5 bg-white/[0.01] overflow-hidden"
-      >
-        <EChartsWrapper
-          option={option}
-          chartType={chartType}
-          onChartReady={() => setChartReady(true)}
-          onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick}
-          onTokenClick={expandedDeployer ? handleTokenClick : undefined}
-        />
-      </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.15 }}
+              className="flex-1 min-h-[200px] mx-2 mb-2 rounded-2xl border border-white/5 bg-white/[0.01] overflow-hidden"
+            >
+              <EChartsWrapper
+                option={option}
+                chartType={chartType}
+                onChartReady={() => setChartReady(true)}
+                onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick}
+                onTokenClick={expandedDeployer ? handleTokenClick : undefined}
+              />
+            </motion.div>
+          </>
+  ) : (
+    <div className="flex-1 px-4 py-4 min-h-[600px]">
+      <LivePulse 
+        coins={liveCoins} 
+        velocity={liveVelocity} 
+        successRate={liveSuccessRate}
+        knownCreators={knownCreatorsMap}
+        marketActivity={pulseMarketActivityMap}
+        onCoinClick={(coin) => {
+          const token: CreatorAggregateToken = {
+            name: coin.name,
+            symbol: coin.symbol,
+            usd_market_cap: coin.usd_market_cap,
+            volume: 0, 
+            mint: coin.mint,
+            description: coin.description,
+            image_uri: coin.image_uri,
+            created_timestamp: coin.created_timestamp,
+            last_trade_timestamp: coin.last_trade_timestamp,
+            complete: coin.complete,
+            ath_market_cap: coin.ath_market_cap
+          };
+          setSelectedToken(token);
+        }}
+      />
+    </div>
+  )}
 
       {/* Footer */}
       <footer className="shrink-0 py-3 border-t border-white/5">

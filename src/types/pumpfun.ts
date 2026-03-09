@@ -128,6 +128,13 @@ export interface PumpFunCreatorFees {
   totalFeesSOL?: string;
 }
 
+export interface VolumeByWindow {
+  volume5m: number;
+  volume1h: number;
+  volume6h: number;
+  volume24h: number;
+}
+
 export interface DeployerAnalytics {
   followers: PumpFunFollower[];
   following: PumpFunFollower[];
