@@ -2,14 +2,15 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, MessageCircle, SlidersHorizontal, X } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, Brain, Grid3X3, Link, Trophy, Percent, Zap, Users, MessageCircle, SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import type { EChartsOption } from "echarts";
+import LivePulse from "./LivePulse";
 import {
   METRIC_LABELS,
   METRIC_UNITS,
   type MetricKey
 } from "@/lib/dummyData";
-import { type CreatorAggregate, type CreatorAggregateToken, type PumpFunCoin } from "@/types/pumpfun";
+import { type CreatorAggregate, type CreatorAggregateToken, type PumpFunCoin, type VolumeByWindow } from "@/types/pumpfun";
 import DeployerDetail from "./DeployerDetail";
 
 type ChartType = "treemap" | "bar" | "barH" | "pie" | "scatter" | "radar" | "sunburst" | "funnel" | "packed" | "line" | "heatmap";
@@ -1041,6 +1042,117 @@ function buildParticleOption(mindshareMax: number, deployers: CreatorAggregate[]
   };
 }
 
+/** Token age in minutes for color gradient (newest = green, older = red) */
+function tokenAgeMinutes(coin: PumpFunCoin): number {
+  const nowSec = Date.now() / 1000;
+  const createdSec = coin.created_timestamp > 1e12 ? coin.created_timestamp / 1000 : coin.created_timestamp;
+  return Math.max(0, (nowSec - createdSec) / 60);
+}
+
+/** Age-based color: 0 = green (newest), 0.5 = amber, 1 = red (~5 min old). */
+function tokenColorByAge(ageMinutes: number): string {
+  const t = Math.min(1, ageMinutes / 5);
+  let r: number, g: number, b: number;
+  const green = [34, 197, 94] as const;
+  const amber = [245, 158, 11] as const;
+  const red = [239, 68, 68] as const;
+  if (t <= 0.5) {
+    const s = t * 2;
+    r = Math.round(green[0] + (amber[0] - green[0]) * s);
+    g = Math.round(green[1] + (amber[1] - green[1]) * s);
+    b = Math.round(green[2] + (amber[2] - green[2]) * s);
+  } else {
+    const s = (t - 0.5) * 2;
+    r = Math.round(amber[0] + (red[0] - amber[0]) * s);
+    g = Math.round(amber[1] + (red[1] - amber[1]) * s);
+    b = Math.round(amber[2] + (red[2] - amber[2]) * s);
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
+function buildLaunchesTreemapOption(coins: PumpFunCoin[], marketActivity?: Record<string, VolumeByWindow>): EChartsOption {
+  const sorted = [...coins]
+    .filter((c) => (c.usd_market_cap ?? 0) > 0)
+    .sort((a, b) => (b.usd_market_cap ?? 0) - (a.usd_market_cap ?? 0));
+  const top = sorted.slice(0, 80);
+
+  const rich: Record<string, object> = {
+    name: { fontSize: 11, fontWeight: 700, color: "#fff", lineHeight: 18, fontFamily: "'DM Sans', sans-serif" },
+    mcap: { fontSize: 10, color: "rgba(255,255,255,0.65)", lineHeight: 14, fontFamily: "'JetBrains Mono', monospace" },
+    sym: { fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 18, fontFamily: "'DM Sans', sans-serif" },
+  };
+  top.forEach((c, i) => {
+    const img = c.image_uri || PUMP_AVATAR_FALLBACK;
+    rich[`img${i}`] = { width: 20, height: 20, borderRadius: 10, backgroundColor: { image: img } as any };
+  });
+
+  return {
+    animation: true,
+    animationDurationUpdate: 700,
+    animationEasingUpdate: "cubicOut",
+    backgroundColor: "#060608",
+    tooltip: {
+      ...TOOLTIP_BASE,
+      formatter: (params: any) => {
+        const c = params.data?.coin as PumpFunCoin | undefined;
+        if (!c) return "";
+        const ageMin = tokenAgeMinutes(c);
+        const ageStr = ageMin < 60 ? `${Math.round(ageMin)}m` : ageMin < 1440 ? `${Math.round(ageMin / 60)}h` : `${Math.round(ageMin / 1440)}d`;
+        const vol = marketActivity?.[c.mint];
+        const vol24 = vol?.volume24h ?? 0;
+        return `<div style="font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.6">
+          <strong style="font-size:14px">${c.name}</strong> <span style="color:#a1a1aa">${c.symbol}</span><br/>
+          <span style="color:#a1a1aa">Market Cap:</span> $${fmtCompact(c.usd_market_cap)}<br/>
+          <span style="color:#a1a1aa">ATH Market Cap:</span> $${fmtCompact(c.ath_market_cap)}<br/>
+          <span style="color:#a1a1aa">Creator:</span> ${c.creator.slice(0, 8)}…<br/>
+          <span style="color:#a1a1aa">Replies:</span> ${c.reply_count ?? 0} · <span style="color:#a1a1aa">Bonded:</span> ${c.complete ? "Yes" : "No"}<br/>
+          <span style="color:#a1a1aa">Age:</span> ${ageStr} · <span style="color:#a1a1aa">Volume:</span> $${fmtCompact(vol24)}
+        </div>`;
+      },
+    },
+    series: [{
+      type: "treemap",
+      id: "launches",
+      universalTransition: { enabled: true },
+      roam: false,
+      nodeClick: false as any,
+      breadcrumb: { show: false },
+      animationDurationUpdate: 700,
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      itemStyle: { borderColor: "#060608", borderWidth: 2, gapWidth: 2 },
+      label: {
+        show: true,
+        position: "insideTopLeft" as any,
+        formatter: (p: any) => {
+          const idx = p.data?.coinIndex as number | undefined;
+          const c = p.data?.coin as PumpFunCoin | undefined;
+          if (c != null && typeof idx === "number") {
+            return `{img${idx}| }\n{name|${c.name}}\n{mcap|$${fmtCompact(c.usd_market_cap)}}`;
+          }
+          return p.name || "";
+        },
+        rich,
+        padding: [6, 8],
+      },
+      data: top.map((coin, coinIndex) => {
+        const ageMin = tokenAgeMinutes(coin);
+        const color = tokenColorByAge(ageMin);
+        return {
+          id: coin.mint,
+          name: coin.symbol,
+          value: Math.max(coin.usd_market_cap ?? 1, 1),
+          coin,
+          coinIndex,
+          itemStyle: { color, borderRadius: 6 },
+        };
+      }),
+    }],
+  };
+}
+
 function buildOption(chartType: ChartType, metric: MetricKey, mindshareMax: number, deployers: CreatorAggregate[], circleAvatars?: Record<string, string>, sparklineDataUrls?: Record<string, Record<SparklineTier, string>>): EChartsOption {
   const unit = METRIC_UNITS[metric];
   
@@ -1404,7 +1516,7 @@ const ECHARTS_MODULES: Record<ChartType, () => Promise<any[]>> = {
   },
 };
 
-function EChartsWrapper({ option, chartType, onChartClick, onTokenClick, onChartReady }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void; onTokenClick?: (t: CreatorAggregateToken) => void; onChartReady?: () => void }) {
+function EChartsWrapper({ option, chartType, onChartClick, onTokenClick, onLaunchesTokenClick, onChartReady }: { option: EChartsOption; chartType: ChartType; onChartClick?: (d: CreatorAggregate) => void; onTokenClick?: (t: CreatorAggregateToken) => void; onLaunchesTokenClick?: (coin: PumpFunCoin) => void; onChartReady?: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -1413,6 +1525,8 @@ function EChartsWrapper({ option, chartType, onChartClick, onTokenClick, onChart
   onChartClickRef.current = onChartClick;
   const onTokenClickRef = useRef(onTokenClick);
   onTokenClickRef.current = onTokenClick;
+  const onLaunchesTokenClickRef = useRef(onLaunchesTokenClick);
+  onLaunchesTokenClickRef.current = onLaunchesTokenClick;
   const onChartReadyRef = useRef(onChartReady);
   onChartReadyRef.current = onChartReady;
 
@@ -1450,13 +1564,19 @@ function EChartsWrapper({ option, chartType, onChartClick, onTokenClick, onChart
           onTokenClickRef.current?.(t);
           return;
         }
+        const coin = params.data?.coin as PumpFunCoin | undefined;
+        if (coin && typeof coin === "object" && "mint" in coin) {
+          onLaunchesTokenClickRef.current?.(coin);
+          return;
+        }
         const d = (params.data?.deployer ?? params.data?.source ?? params.data?.[3]) as CreatorAggregate | undefined;
         if (d && typeof d === "object" && "creator" in d) onChartClickRef.current?.(d);
       });
     }
 
+    const isLaunchesTreemap = (option?.series as any)?.[0]?.id === "launches";
     instanceRef.current.setOption(option, {
-      notMerge: false,
+      notMerge: isLaunchesTreemap,
       replaceMerge: ["series", "grid", "xAxis", "yAxis", "graphic"],
       lazyUpdate: false,
     });
@@ -1570,7 +1690,7 @@ function TokenDetailPanel({ token, onClose }: { token: CreatorAggregateToken | n
             </p>
           </div>
           <div className="bg-[#111113] p-3">
-            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">24h Volume</p>
+            <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-0.5">Volume</p>
             <p className="text-sm font-bold text-white font-mono">${fmtCompact(token.volume)} USD</p>
           </div>
         </div>
@@ -1634,6 +1754,11 @@ export default function AnalyticsDashboard() {
   const [metric, setMetric] = useState<MetricKey>("bonded");
   const [chartType, setChartType] = useState<ChartType>("treemap");
   const [selected, setSelected] = useState<CreatorAggregate | null>(null);
+  const [viewType, setViewType] = useState<"deployers" | "launches">("launches");
+  const [liveCoins, setLiveCoins] = useState<PumpFunCoin[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveVelocity, setLiveVelocity] = useState(0);
+  const [liveSuccessRate, setLiveSuccessRate] = useState(0);
   const [expandingDeployer, setExpandingDeployer] = useState<CreatorAggregate | null>(null);
   const [splittingDeployer, setSplittingDeployer] = useState<CreatorAggregate | null>(null);
   const [expandedDeployer, setExpandedDeployer] = useState<CreatorAggregate | null>(null);
@@ -1643,11 +1768,12 @@ export default function AnalyticsDashboard() {
   const phaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [circleAvatars, setCircleAvatars] = useState<Record<string, string>>({});
   const [sparklineDataUrls, setSparklineDataUrls] = useState<Record<string, Record<SparklineTier, string>>>({});
-  type VolumeByWindow = { volume5m: number; volume1h: number; volume6h: number; volume24h: number };
+  const [pulseMarketActivityMap, setPulseMarketActivityMap] = useState<Record<string, VolumeByWindow>>({});
   const [marketActivityMap, setMarketActivityMap] = useState<Record<string, VolumeByWindow>>({});
   const [marketActivityFetchedAt, setMarketActivityFetchedAt] = useState<number | null>(null);
   const [creatorFeesMap, setCreatorFeesMap] = useState<Record<string, { totalFeesSOL: number }>>({});
   const [creatorFeesFetchedAt, setCreatorFeesFetchedAt] = useState<number | null>(null);
+  const [enrichedCreators, setEnrichedCreators] = useState<Record<string, CreatorAggregate>>({});
 
   const updateFilter = useCallback(<K extends keyof CoinFilters>(key: K, val: CoinFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
@@ -1886,6 +2012,168 @@ export default function AnalyticsDashboard() {
     })();
     return () => { cancelled = true; };
   }, [allCoins]);
+
+  // Combined creator map for live reputation matching - includes enriched real-time profiles
+  const knownCreatorsMap = useMemo(() => {
+    const map: Record<string, CreatorAggregate> = { ...enrichedCreators };
+    [...bondedData, ...totalMarketCapData, ...totalAthMarketCapData, ...bondRateData, ...athEfficiencyData, ...followersData].forEach(d => {
+      map[d.creator] = d;
+    });
+    return map;
+  }, [bondedData, totalMarketCapData, totalAthMarketCapData, bondRateData, athEfficiencyData, followersData, enrichedCreators]);
+
+  // Enrich creator profiles for live feed
+  useEffect(() => {
+    if (viewType !== "launches" || liveCoins.length === 0) return;
+
+    const creatorsToFetch = [...new Set(liveCoins.map(c => c.creator))].filter(
+      addr => !knownCreatorsMap[addr] && !enrichedCreators[addr]
+    );
+
+    if (creatorsToFetch.length === 0) return;
+
+    // Fetch up to 5 at a time to avoid spamming
+    const batch = creatorsToFetch.slice(0, 5);
+    batch.forEach(async (addr) => {
+      try {
+        // Fetch profile and tokens in parallel
+        const [profileRes, tokensRes] = await Promise.all([
+          fetch(`/api/pumpfun/users/${addr}`),
+          fetch(`/api/pumpfun/creator-tokens/${addr}`)
+        ]);
+
+        let profileData = null;
+        let tokenStats = { total: 0, bonded: 0 };
+
+        if (profileRes.ok) {
+          const json = await profileRes.json();
+          if (json.success) profileData = json.data;
+        }
+
+        if (tokensRes.ok) {
+          const json = await tokensRes.json();
+          if (json.success) {
+            tokenStats = { total: json.total, bonded: json.bonded };
+          }
+        }
+
+        if (profileData || tokenStats.total > 0) {
+          setEnrichedCreators(prev => ({
+            ...prev,
+            [addr]: {
+              creator: addr,
+              creator_display_name: profileData?.username || addr.slice(0, 6),
+              username: profileData?.username,
+              followers_count: profileData?.followers_count,
+              following_count: profileData?.following_count,
+              profile_image: profileData?.profile_image,
+              avatar_url: profileData?.profile_image,
+              token_count: tokenStats.total,
+              bonded: tokenStats.bonded,
+              volume: 0,
+              usd_market_cap: 0,
+              total_ath_market_cap: 0,
+              creator_fees: 0,
+              mindshare: 0,
+              top_tokens: [],
+              bonded_tokens: []
+            }
+          }));
+        }
+      } catch (err) {
+        console.error(`Failed to enrich creator ${addr}:`, err);
+      }
+    });
+  }, [viewType, liveCoins, knownCreatorsMap, enrichedCreators]);
+
+  // Fetch live coins polling
+  useEffect(() => {
+    if (viewType !== "launches") return;
+    
+    let cancelled = false;
+    let timer: any;
+
+    async function fetchLive() {
+      if (cancelled) return;
+      setLiveLoading((prev) => prev || false);
+      try {
+        const res = await fetch(`/api/pumpfun/live?limit=50&_t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("API fail");
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          const freshCoins: PumpFunCoin[] = json.data || [];
+          
+          setLiveCoins(prev => {
+            const coinMap = new Map<string, PumpFunCoin>();
+            prev.forEach(c => coinMap.set(c.mint, c));
+            freshCoins.forEach(c => coinMap.set(c.mint, c));
+            
+            const allCoins = Array.from(coinMap.values()).sort((a, b) => {
+              const tsA = a.created_timestamp > 1e12 ? a.created_timestamp : a.created_timestamp * 1000;
+              const tsB = b.created_timestamp > 1e12 ? b.created_timestamp : b.created_timestamp * 1000;
+              return tsB - tsA;
+            });
+
+            return allCoins.slice(0, 250);
+          });
+          
+          const mints = freshCoins.map((c: any) => c.mint);
+          if (mints.length > 0) {
+            fetch("/api/pumpfun/market-activity", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mints })
+            })
+            .then(res => res.json())
+            .then(volData => {
+              if (!cancelled && volData.marketActivity) {
+                setPulseMarketActivityMap(prevMap => {
+                  const newMap = { ...prevMap, ...volData.marketActivity };
+                  
+                  let total5m = 0;
+                  let total1h = 0;
+                  mints.forEach((m: string) => {
+                    const v = newMap[m];
+                    if (v) {
+                      total5m += v.volume5m;
+                      total1h += v.volume1h;
+                    }
+                  });
+                  
+                  const ratio = total1h > 0 ? (total5m / (total1h / 12)) * 100 : 0;
+                  setLiveVelocity(Math.min(200, Math.round(ratio)));
+
+                  return newMap;
+                });
+
+                setLiveCoins(currentCoins => {
+                  const totalProgress = currentCoins.reduce((acc: number, c: any) => {
+                    const prog = Math.min(100, (c.usd_market_cap / 60000) * 100);
+                    return acc + (c.complete ? 100 : prog);
+                  }, 0);
+                  setLiveSuccessRate(Math.round(totalProgress / Math.max(1, currentCoins.length)));
+                  return currentCoins;
+                });
+              }
+            })
+            .catch(err => console.error("Live market activity fetch error:", err));
+          }
+        }
+      } catch (err) {
+        console.error("Live fetch error:", err);
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    }
+
+    fetchLive();
+    timer = setInterval(fetchLive, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [viewType]);
 
   // Fetch 24h volume (market-activity) for all coins OR bonded tokens after they load.
   useEffect(() => {
@@ -2483,6 +2771,9 @@ export default function AnalyticsDashboard() {
   }, [clearPhaseTimeout]);
 
   const option = useMemo(() => {
+    if (viewType === "launches") {
+      return buildLaunchesTreemapOption(liveCoins, pulseMarketActivityMap);
+    }
     if (deployers.length === 0) return {};
     if (introPlaying && chartType === "treemap") {
       return buildParticleOption(mindshareMax, deployers);
@@ -2497,7 +2788,7 @@ export default function AnalyticsDashboard() {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack, marketActivityMap);
     }
     return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars, sparklineDataUrls);
-  }, [introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls, marketActivityMap]);
+  }, [viewType, liveCoins, pulseMarketActivityMap, introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls, marketActivityMap]);
 
   // Start intro-end timeout only once chart is ready so the particle option is actually painted before we switch to treemap
   useEffect(() => {
@@ -2555,7 +2846,25 @@ export default function AnalyticsDashboard() {
     { label: "Creator Fees", value: fmtCompact(totals.fees), unit: "SOL", subtitle: feesAsOf ? `As of ${feesAsOf}` : undefined },
   ];
 
-  if (loading) {
+  const handleLaunchesTokenClick = useCallback((coin: PumpFunCoin) => {
+    const vol24h = pulseMarketActivityMap[coin.mint]?.volume24h ?? 0;
+    const token: CreatorAggregateToken = {
+      name: coin.name,
+      symbol: coin.symbol,
+      usd_market_cap: coin.usd_market_cap,
+      volume: vol24h,
+      mint: coin.mint,
+      description: coin.description,
+      image_uri: coin.image_uri,
+      created_timestamp: coin.created_timestamp,
+      last_trade_timestamp: coin.last_trade_timestamp,
+      complete: coin.complete,
+      ath_market_cap: coin.ath_market_cap,
+    };
+    setSelectedToken(token);
+  }, [pulseMarketActivityMap]);
+
+  if (loading && viewType === "deployers") {
     return <div className="flex items-center justify-center h-full text-zinc-600 bg-[#060608]">Loading deployers...</div>;
   }
 
@@ -2564,22 +2873,45 @@ export default function AnalyticsDashboard() {
       {/* Controls bar */}
       <div className="shrink-0 px-4 pt-4 pb-2">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2">
             <h1
               className="text-2xl sm:text-3xl font-black tracking-tight"
               style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
             >
-              Top Pump.fun{" "}
-              <span
-                className="bg-clip-text text-transparent"
-                style={{ backgroundImage: "linear-gradient(135deg, #ef4444 0%, #c026d3 50%, #6366f1 100%)" }}
-              >
-                Active Deployers
-              </span>
+              {viewType === "launches" ? (
+                <>
+                  Latest Pump.fun{" "}
+                  <span
+                    className="bg-clip-text text-transparent"
+                    style={{ backgroundImage: "linear-gradient(135deg, #ef4444 0%, #c026d3 50%, #6366f1 100%)" }}
+                  >
+                    Token Launches
+                  </span>
+                </>
+              ) : (
+                <>
+                  Top Pump.fun{" "}
+                  <span
+                    className="bg-clip-text text-transparent"
+                    style={{ backgroundImage: "linear-gradient(135deg, #ef4444 0%, #c026d3 50%, #6366f1 100%)" }}
+                  >
+                    Active Deployers
+                  </span>
+                </>
+              )}
             </h1>
+            <button
+              type="button"
+              onClick={() => setViewType(viewType === "launches" ? "deployers" : "launches")}
+              className="p-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Switch view"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </button>
           </motion.div>
 
-          {/* Summary stats inline */}
+          {/* Summary stats inline - deployers view only */}
+          {viewType === "deployers" && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -2599,9 +2931,11 @@ export default function AnalyticsDashboard() {
               </div>
             ))}
           </motion.div>
+          )}
         </div>
 
-        {/* Chart type + metric toggles */}
+        {/* Chart type + metric toggles - deployers view only */}
+        {viewType === "deployers" && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -2918,9 +3252,10 @@ export default function AnalyticsDashboard() {
             )}
           </div>
         </motion.div>
+        )}
       </div>
 
-      {/* Chart — fills remaining viewport */}
+      {/* Chart area - shared by both launches and deployers views */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -2933,6 +3268,7 @@ export default function AnalyticsDashboard() {
           onChartReady={() => setChartReady(true)}
           onChartClick={expandingDeployer || splittingDeployer || expandedDeployer ? undefined : handleChartClick}
           onTokenClick={expandedDeployer ? handleTokenClick : undefined}
+          onLaunchesTokenClick={viewType === "launches" ? handleLaunchesTokenClick : undefined}
         />
       </motion.div>
 
