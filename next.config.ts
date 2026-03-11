@@ -11,12 +11,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Configure server to bind to 0.0.0.0 for Replit
-  ...(process.env.NODE_ENV === 'development' && {
-    async rewrites() {
-      return [];
-    },
-  }),
 };
 
 export default nextConfig;
