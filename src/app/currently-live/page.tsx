@@ -55,19 +55,15 @@ export default function LiveTokensPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(
-        "https://frontend-api-v3.pump.fun/coins/search-unrestricted?currentlyLive=true&sort=last_trade_timestamp&limit=50&includeNsfw=false"
-      );
+      const res = await fetch("/api/pumpfun/live-streams");
       if (!res.ok) throw new Error("Failed to fetch live tokens");
       const data = await res.json();
       
-      // Filter by complete: false as requested
-      const filtered = data.filter((c: PumpFunCoin) => c.complete === false);
-      setCoins(filtered);
+      setCoins(data);
       setLastUpdated(new Date());
       
       // Trigger sequential viewer count fetching
-      fetchViewerCountsSequentially(filtered);
+      fetchViewerCountsSequentially(data);
     } catch (err) {
       console.error("Error fetching live tokens:", err);
       setError("Failed to load live streams. Please try again later.");
