@@ -20,15 +20,52 @@ const firebaseConfig = {
     measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+const hasMinimalConfig =
+  typeof firebaseConfig.apiKey === "string" &&
+  firebaseConfig.apiKey.length > 0 &&
+  typeof firebaseConfig.projectId === "string" &&
+  firebaseConfig.projectId.length > 0;
+
+let app: ReturnType<typeof initializeApp>;
+let auth: ReturnType<typeof getAuth>;
+let db: ReturnType<typeof getFirestore>;
+let storage: ReturnType<typeof getStorage>;
+
+if (hasMinimalConfig) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  } catch (e) {
+    console.error("[firebase.service] initializeApp failed:", e);
+    const fallback = initializeApp({
+      apiKey: "dummy-key-for-fallback",
+      projectId: "demo-fallback",
+    });
+    app = fallback;
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  }
+} else {
+  const fallback = initializeApp({
+    apiKey: "dummy-key-for-fallback",
+    projectId: "demo-fallback",
+  });
+  app = fallback;
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+}
 
 let analytics: Analytics | null = null;
-if (typeof window !== "undefined") {
-  analytics = getAnalytics(app);
+if (typeof window !== "undefined" && hasMinimalConfig) {
+  try {
+    analytics = getAnalytics(app);
+  } catch {
+    // ignore
+  }
 }
 
 // const payments = getStripePayments(app, {

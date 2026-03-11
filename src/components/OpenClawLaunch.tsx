@@ -15,14 +15,24 @@ function toBase58Sig(raw: unknown): string {
   return String(raw);
 }
 
+async function urlToFile(url: string, filename = "image.png"): Promise<File> {
+  const res = await fetch(url, { mode: "cors" });
+  if (!res.ok) throw new Error("Failed to fetch image");
+  const blob = await res.blob();
+  const type = blob.type || "image/png";
+  return new File([blob], filename, { type });
+}
+
 export interface OpenClawLaunchProps {
   apiKey: string;
   tokenName: string;
   symbol: string;
-  imageFile: File | null;
+  imageFile?: File | null;
+  imageUrl?: string;
   websiteUrl: string;
   twitterUrl: string;
   telegramUrl: string;
+  description?: string;
   onSuccess: (mint: string, agentUrl?: string) => void;
 }
 
@@ -30,10 +40,12 @@ export default function OpenClawLaunch({
   apiKey,
   tokenName,
   symbol,
-  imageFile,
+  imageFile = null,
+  imageUrl,
   websiteUrl,
   twitterUrl,
   telegramUrl,
+  description = "OpenClaw agent token",
   onSuccess,
 }: OpenClawLaunchProps) {
   const { wallets } = useWallets();
@@ -48,8 +60,8 @@ export default function OpenClawLaunch({
       alert("Please enter token name and ticker.");
       return;
     }
-    if (!imageFile) {
-      alert("Please upload a token image.");
+    if (!imageFile && !imageUrl) {
+      alert("Please upload a token image or provide an image URL.");
       return;
     }
     if (!apiKey.trim()) {
@@ -77,14 +89,18 @@ export default function OpenClawLaunch({
       const shortMint = mint.publicKey.toBase58().slice(0, 8);
 
       setStatusMsg("Uploading image and metadata...");
+      let fileToUpload: File = imageFile!;
+      if (!fileToUpload && imageUrl) {
+        fileToUpload = await urlToFile(imageUrl, `${trimmedSymbol}.png`);
+      }
       const imageStorageRef = ref(storage, `openclaw/${shortMint}-i`);
-      await uploadBytes(imageStorageRef, imageFile, { contentType: imageFile.type });
+      await uploadBytes(imageStorageRef, fileToUpload, { contentType: fileToUpload.type });
       const finalImageUrl = await getDownloadURL(imageStorageRef);
 
       const metadata = {
         name: trimmedName,
         symbol: trimmedSymbol,
-        description: "OpenClaw agent token",
+        description: (description || "OpenClaw agent token").trim(),
         image: finalImageUrl,
         showName: true,
         createdOn: "https://pump.fun",
@@ -172,7 +188,7 @@ export default function OpenClawLaunch({
         disabled={loading}
         className="w-full rounded-xl bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white font-bold py-3 px-4 text-sm transition-colors"
       >
-        {loading ? statusMsg || "Launching..." : "Launch token & agent"}
+        {loading ? statusMsg || "Deploying..." : "Deploy token (gas only)"}
       </button>
     </div>
   );
