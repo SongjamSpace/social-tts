@@ -15,9 +15,39 @@ function toBase58Sig(raw: unknown): string {
   return String(raw);
 }
 
-async function urlToFile(url: string, filename = "image.png"): Promise<File> {
-  const res = await fetch(url, { mode: "cors" });
-  if (!res.ok) throw new Error("Failed to fetch image");
+const VANITY_SUFFIX = "eve";
+/** Expected attempts for 3-char base58 suffix (1/58^3). Used for progress %. */
+const EXPECTED_ATTEMPTS_EVE = 58 * 58 * 58;
+
+/** Grind until mint address (base58) ends with the given suffix. Yields periodically so UI can update. */
+async function grindVanityKeypair(
+  suffix: string,
+  onProgress: (attempts: number) => void
+): Promise<Keypair> {
+  const yieldEvery = 5000;
+  let attempts = 0;
+  for (;;) {
+    for (let i = 0; i < yieldEvery; i++) {
+      const kp = Keypair.generate();
+      if (kp.publicKey.toBase58().endsWith(suffix)) return kp;
+      attempts++;
+    }
+    onProgress(attempts);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
+/** Fetch image via our proxy to avoid CORS (e.g. DALL-E Azure URLs). */
+async function imageUrlToFile(url: string, filename = "image.png"): Promise<File> {
+  const res = await fetch("/api/openclaw/image-proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error ?? "Failed to fetch image");
+  }
   const blob = await res.blob();
   const type = blob.type || "image/png";
   return new File([blob], filename, { type });
@@ -85,13 +115,18 @@ export default function OpenClawLaunch({
       );
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
-      const mint = Keypair.generate();
+
+      setStatusMsg("Grinding Contract Address");
+      const mint = await grindVanityKeypair(VANITY_SUFFIX, (attempts) => {
+        const pct = Math.min(100, Math.round((attempts / EXPECTED_ATTEMPTS_EVE) * 100));
+        setStatusMsg(`Grinding Contract Address (${pct}%)`);
+      });
       const shortMint = mint.publicKey.toBase58().slice(0, 8);
 
       setStatusMsg("Uploading image and metadata...");
       let fileToUpload: File = imageFile!;
       if (!fileToUpload && imageUrl) {
-        fileToUpload = await urlToFile(imageUrl, `${trimmedSymbol}.png`);
+        fileToUpload = await imageUrlToFile(imageUrl, `${trimmedSymbol}.png`);
       }
       const imageStorageRef = ref(storage, `openclaw/${shortMint}-i`);
       await uploadBytes(imageStorageRef, fileToUpload, { contentType: fileToUpload.type });
