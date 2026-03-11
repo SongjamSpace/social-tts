@@ -92,7 +92,7 @@ export default function LiveTokensPage() {
               Currently Live <sup className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{coins.length} Online</sup>
             </h1>
             <p className="text-zinc-500 mt-1 max-w-xl">
-              Real-time token launches with active live streams. Track viewer counts and engagement before they bond.
+              Recently traded tokens with active live streams. Track viewer counts and engagement before they bond.
             </p>
           </div>
 
