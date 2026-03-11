@@ -5,8 +5,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 
+const SolanaConnectors = toSolanaWalletConnectors();
 
-const solanaConnectors = toSolanaWalletConnectors();
+/** True when wallet connect (Privy) is available for signing. False on /openclaw so the page isn’t blocked by overlay. */
+export const PrivyAvailableContext = createContext<boolean>(true);
+export const usePrivyAvailable = () => useContext(PrivyAvailableContext);
 
 import { auth, db, logFirebaseEvent } from "@/services/firebase.service";
 import { onAuthStateChanged, TwitterAuthProvider, signInWithPopup, User, getAdditionalUserInfo } from "firebase/auth";
@@ -105,30 +108,52 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+const privyConfig = {
+  appearance: {
+    theme: "dark" as const,
+    accentColor: "#7c3aed",
+    walletChainType: "solana-only" as const,
+    walletList: ["phantom", "solflare", "detected_solana_wallets"] as const,
+  },
+  externalWallets: {
+    solana: {
+      connectors: SolanaConnectors,
+    },
+  },
+};
+
+export function Providers({
+  children,
+  skipPrivy = false,
+}: {
+  children: React.ReactNode;
+  skipPrivy?: boolean;
+}) {
   const [queryClient] = useState(() => new QueryClient());
 
+  const content = (
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </AuthProvider>
+  );
+
+  if (skipPrivy) {
+    return (
+      <PrivyAvailableContext.Provider value={false}>
+        {content}
+      </PrivyAvailableContext.Provider>
+    );
+  }
+
   return (
+    <PrivyAvailableContext.Provider value={true}>
     <PrivyProvider
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ""}
-      config={{
-        appearance: {
-          theme: "dark",
-          accentColor: "#7c3aed",
-          walletChainType: "solana-only",
-          walletList: ["phantom", "solflare", "detected_solana_wallets"],
-        },
-        externalWallets: {
-          solana: {
-            connectors: solanaConnectors,
-          },
-        },
-      }}
+      config={privyConfig}
     >
-      <AuthProvider>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      </AuthProvider>
+      {content}
     </PrivyProvider>
+    </PrivyAvailableContext.Provider>
   );
 }
 

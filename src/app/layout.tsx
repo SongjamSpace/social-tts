@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import { ProvidersWithRoute } from "@/components/ProvidersWithRoute";
 import { ToastProvider } from "@/contexts/ToastContext";
 import Navbar from "@/components/Navbar";
 
@@ -39,13 +39,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" style={{ background: "#060608" }}>
       <body className={`${dmSans.variable} ${jetbrainsMono.variable} ${dmSans.className} antialiased bg-[#060608]`}>
         <ToastProvider>
-          <Providers>
+          <ProvidersWithRoute>
             <Navbar />
             {children}
-          </Providers>
+          </ProvidersWithRoute>
         </ToastProvider>
       </body>
     </html>
