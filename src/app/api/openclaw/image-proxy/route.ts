@@ -7,20 +7,35 @@ import { NextResponse } from "next/server";
  * is cross-origin, e.g. DALL-E Azure Blob Storage). Returns the image bytes.
  */
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const url = typeof body?.url === "string" ? body.url.trim() : "";
-    if (!url) {
-      return NextResponse.json({ error: "url is required" }, { status: 400 });
-    }
-    // Only allow HTTPS
-    if (!url.startsWith("https://")) {
-      return NextResponse.json({ error: "Only https URLs are allowed" }, { status: 400 });
-    }
-    const res = await fetch(url, { headers: { "User-Agent": "EveOpenClaw/1.0" } });
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const url = typeof (body as { url?: unknown })?.url === "string"
+    ? (body as { url: string }).url.trim()
+    : "";
+  if (!url) {
+    return NextResponse.json({ error: "url is required" }, { status: 400 });
+  }
+  if (!url.startsWith("https://")) {
+    return NextResponse.json({ error: "Only https URLs are allowed" }, { status: 400 });
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; EveOpenClaw/1.0)",
+        "Accept": "image/*",
+      },
+      cache: "no-store",
+    });
     if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[openclaw/image-proxy] upstream", res.status, url.slice(0, 80), text.slice(0, 200));
       return NextResponse.json(
-        { error: `Failed to fetch image: ${res.status}` },
+        { error: `Upstream returned ${res.status}: ${text.slice(0, 100) || res.statusText}` },
         { status: 502 }
       );
     }
@@ -31,10 +46,11 @@ export async function POST(request: Request) {
       headers: { "Content-Type": contentType },
     });
   } catch (e) {
-    console.error("[openclaw/image-proxy]", e);
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[openclaw/image-proxy]", message, e);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to proxy image" },
-      { status: 500 }
+      { error: `Proxy fetch failed: ${message}` },
+      { status: 502 }
     );
   }
 }

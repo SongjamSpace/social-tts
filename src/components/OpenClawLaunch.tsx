@@ -15,6 +15,28 @@ function toBase58Sig(raw: unknown): string {
   return String(raw);
 }
 
+const VANITY_SUFFIX = "eve";
+/** Expected attempts for 3-char base58 suffix (1/58^3). Used for progress %. */
+const EXPECTED_ATTEMPTS_EVE = 58 * 58 * 58;
+
+/** Grind until mint address (base58) ends with the given suffix. Yields periodically so UI can update. */
+async function grindVanityKeypair(
+  suffix: string,
+  onProgress: (attempts: number) => void
+): Promise<Keypair> {
+  const yieldEvery = 5000;
+  let attempts = 0;
+  for (;;) {
+    for (let i = 0; i < yieldEvery; i++) {
+      const kp = Keypair.generate();
+      if (kp.publicKey.toBase58().endsWith(suffix)) return kp;
+      attempts++;
+    }
+    onProgress(attempts);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
 /** Fetch image via our proxy to avoid CORS (e.g. DALL-E Azure URLs). */
 async function imageUrlToFile(url: string, filename = "image.png"): Promise<File> {
   const res = await fetch("/api/openclaw/image-proxy", {
@@ -93,7 +115,12 @@ export default function OpenClawLaunch({
       );
       const publicKey = new PublicKey(solanaWallet.address);
       const sdk = new PumpSdk();
-      const mint = Keypair.generate();
+
+      setStatusMsg("Grinding Contract Address");
+      const mint = await grindVanityKeypair(VANITY_SUFFIX, (attempts) => {
+        const pct = Math.min(100, Math.round((attempts / EXPECTED_ATTEMPTS_EVE) * 100));
+        setStatusMsg(`Grinding Contract Address (${pct}%)`);
+      });
       const shortMint = mint.publicKey.toBase58().slice(0, 8);
 
       setStatusMsg("Uploading image and metadata...");
