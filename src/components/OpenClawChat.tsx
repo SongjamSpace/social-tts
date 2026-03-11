@@ -87,7 +87,7 @@ function GenerateLogoBlock({
         disabled={generating}
         className="w-full rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white text-sm font-medium py-2 px-3 disabled:opacity-50"
       >
-        {generating ? "Generating…" : imageUrl ? "Regenerate logo" : "Generate logo (OpenAI)"}
+        {generating ? "Generating…" : imageUrl ? "Regenerate logo" : "Generate logo"}
       </button>
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
