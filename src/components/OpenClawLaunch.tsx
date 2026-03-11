@@ -15,9 +15,17 @@ function toBase58Sig(raw: unknown): string {
   return String(raw);
 }
 
-async function urlToFile(url: string, filename = "image.png"): Promise<File> {
-  const res = await fetch(url, { mode: "cors" });
-  if (!res.ok) throw new Error("Failed to fetch image");
+/** Fetch image via our proxy to avoid CORS (e.g. DALL-E Azure URLs). */
+async function imageUrlToFile(url: string, filename = "image.png"): Promise<File> {
+  const res = await fetch("/api/openclaw/image-proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error ?? "Failed to fetch image");
+  }
   const blob = await res.blob();
   const type = blob.type || "image/png";
   return new File([blob], filename, { type });
@@ -91,7 +99,7 @@ export default function OpenClawLaunch({
       setStatusMsg("Uploading image and metadata...");
       let fileToUpload: File = imageFile!;
       if (!fileToUpload && imageUrl) {
-        fileToUpload = await urlToFile(imageUrl, `${trimmedSymbol}.png`);
+        fileToUpload = await imageUrlToFile(imageUrl, `${trimmedSymbol}.png`);
       }
       const imageStorageRef = ref(storage, `openclaw/${shortMint}-i`);
       await uploadBytes(imageStorageRef, fileToUpload, { contentType: fileToUpload.type });
