@@ -23,6 +23,7 @@ const BIP_OPTIONS = [
   { id: "001", label: "#001", href: "https://moltspaces.com/pumpfun", external: true },
   { id: "002", label: "#002", href: "/voices", external: false },
   { id: "003", label: "#003", href: "/", external: false },
+  { id: "live", label: "Live", href: "/currently-live", external: false },
 ];
 
 export default function Navbar() {

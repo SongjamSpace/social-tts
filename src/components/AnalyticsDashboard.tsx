@@ -66,6 +66,7 @@ interface CoinFilters {
   minBondRate: number | null;
   hasPfpOnly: boolean;
   minFollowers: number | null;
+  isCurrentlyLive: boolean;
 }
 
 const DEFAULT_FILTERS: CoinFilters = {
@@ -87,6 +88,7 @@ const DEFAULT_FILTERS: CoinFilters = {
   minBondRate: null,
   hasPfpOnly: false,
   minFollowers: null,
+  isCurrentlyLive: true,
 };
 
 // Slider ranges for filter panel
@@ -194,6 +196,7 @@ function countActiveFilters(f: CoinFilters): number {
   if (f.minBondRate != null) n++;
   if (f.hasPfpOnly) n++;
   if (f.minFollowers != null) n++;
+  if (f.isCurrentlyLive) n++;
   return n;
 }
 
@@ -225,6 +228,7 @@ function passesCoinFilter(coin: any, f: CoinFilters): boolean {
     const ratio = virt > 0 ? (coin.real_sol_reserves || 0) / virt : 0;
     if (ratio < f.minLiquidityRatio) return false;
   }
+  if (f.isCurrentlyLive && coin.is_currently_live !== true) return false;
   return true;
 }
 
@@ -1774,6 +1778,9 @@ export default function AnalyticsDashboard() {
   const [creatorFeesMap, setCreatorFeesMap] = useState<Record<string, { totalFeesSOL: number }>>({});
   const [creatorFeesFetchedAt, setCreatorFeesFetchedAt] = useState<number | null>(null);
   const [enrichedCreators, setEnrichedCreators] = useState<Record<string, CreatorAggregate>>({});
+  const filteredLiveCoins = useMemo(() => {
+    return liveCoins.filter(c => !filters.isCurrentlyLive || c.is_currently_live === true);
+  }, [liveCoins, filters.isCurrentlyLive]);
 
   const updateFilter = useCallback(<K extends keyof CoinFilters>(key: K, val: CoinFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: val }));
@@ -2772,7 +2779,7 @@ export default function AnalyticsDashboard() {
 
   const option = useMemo(() => {
     if (viewType === "launches") {
-      return buildLaunchesTreemapOption(liveCoins, pulseMarketActivityMap);
+      return buildLaunchesTreemapOption(filteredLiveCoins, pulseMarketActivityMap);
     }
     if (deployers.length === 0) return {};
     if (introPlaying && chartType === "treemap") {
@@ -2788,7 +2795,7 @@ export default function AnalyticsDashboard() {
       return buildDrilldownOption(expandedDeployer, mindshareMax, handleBack, marketActivityMap);
     }
     return buildOption(chartType, metric, mindshareMax, deployers, circleAvatars, sparklineDataUrls);
-  }, [viewType, liveCoins, pulseMarketActivityMap, introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls, marketActivityMap]);
+  }, [viewType, filteredLiveCoins, pulseMarketActivityMap, introPlaying, chartType, metric, mindshareMax, expandingDeployer, splittingDeployer, expandedDeployer, handleBack, deployers, circleAvatars, sparklineDataUrls, marketActivityMap]);
 
   // Start intro-end timeout only once chart is ready so the particle option is actually painted before we switch to treemap
   useEffect(() => {
@@ -2902,11 +2909,15 @@ export default function AnalyticsDashboard() {
             </h1>
             <button
               type="button"
-              onClick={() => setViewType(viewType === "launches" ? "deployers" : "launches")}
-              className="p-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-              aria-label="Switch view"
+              onClick={() => updateFilter("isCurrentlyLive", !filters.isCurrentlyLive)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
+                filters.isCurrentlyLive
+                  ? "text-white border-blue-500/40 bg-blue-500/15 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+                  : "text-zinc-500 border-transparent hover:text-zinc-300 hover:bg-white/[0.03]"
+              }`}
             >
-              <ChevronDown className="w-5 h-5" />
+              <div className={`w-1.5 h-1.5 rounded-full ${filters.isCurrentlyLive ? "bg-red-500 animate-pulse" : "bg-zinc-600"}`} />
+              <span>Currently Live</span>
             </button>
           </motion.div>
 
@@ -2933,15 +2944,16 @@ export default function AnalyticsDashboard() {
           </motion.div>
           )}
         </div>
+      </div>
 
-        {/* Chart type + metric toggles - deployers view only */}
-        {viewType === "deployers" && (
-        <motion.div
+      <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="flex flex-col sm:flex-row gap-3"
         >
+          {viewType === "deployers" && (
+            <>
           <div className="flex flex-wrap gap-1.5">
             <span className="flex items-center text-[10px] text-zinc-600 mr-1 uppercase tracking-widest font-bold">Chart</span>
             {CHART_TYPES.map((c) => {
@@ -2995,6 +3007,8 @@ export default function AnalyticsDashboard() {
               );
             })}
           </div>
+          </>
+          )}
 
           {/* Filter toggle */}
           <div className="relative ml-auto">
@@ -3077,6 +3091,10 @@ export default function AnalyticsDashboard() {
                     <label className="flex items-center gap-1.5 cursor-pointer select-none">
                       <input type="checkbox" checked={filters.notBondedOnly} onChange={(e) => { updateFilter("notBondedOnly", e.target.checked); if (e.target.checked) updateFilter("bondedOnly", false); }} className="accent-amber-500 w-3 h-3 rounded" />
                       <span className="text-zinc-400">Not Bonded Only</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={filters.isCurrentlyLive} onChange={(e) => updateFilter("isCurrentlyLive", e.target.checked)} className="accent-amber-500 w-3 h-3 rounded" />
+                      <span className="text-zinc-400">Currently Live</span>
                     </label>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -3248,12 +3266,9 @@ export default function AnalyticsDashboard() {
                     Showing {deployers.length} deployers with {countActiveFilters(filters)} active filter{countActiveFilters(filters) !== 1 ? "s" : ""}
                   </p>
                 )}
-              </div>
-            )}
+              </div>)}
           </div>
         </motion.div>
-        )}
-      </div>
 
       {/* Chart area - shared by both launches and deployers views */}
       <motion.div
@@ -3293,6 +3308,7 @@ export default function AnalyticsDashboard() {
 
       <DeployerDetail deployer={selected} metricLabels={METRIC_LABELS} onClose={() => setSelected(null)} />
       <TokenDetailPanel token={selectedToken} onClose={() => setSelectedToken(null)} />
-    </div>
+    
+      </div>
   );
 }
