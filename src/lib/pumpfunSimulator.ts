@@ -95,7 +95,7 @@ export type SimulatorConfig = {
 
 export const DEFAULT_SIM_CONFIG: SimulatorConfig = {
   minViewers: 8,
-  maxViewers: 25,
+  maxViewers: 35,
   viewerVelocity30s: 4,
   minMarketCap: 15_000,
   maxMarketCap: 35_000,
@@ -135,6 +135,15 @@ export class PumpfunLivestreamSimulator {
 
   setSettings(newConfig: Partial<SimulatorConfig>) {
     this.config = { ...this.config, ...newConfig };
+  }
+
+  reset() {
+    this.positions = {};
+    this.history = {};
+    this.trades = [];
+    this.logs = [];
+    this.lastByMint = {};
+    this.capital = this.initialCapital;
   }
 
   update(token: LiveTokenUpdate) {

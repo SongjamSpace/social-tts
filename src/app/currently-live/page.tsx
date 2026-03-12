@@ -75,7 +75,9 @@ export default function LiveTokensPage() {
         try {
           const tRes = await fetch(`/api/pumpfun/trades/${coin.mint}?limit=50`);
           if (tRes.ok) {
-            const trades = await tRes.json();
+            const data = await tRes.json();
+            const trades = data.trades || data; // Handle both {trades:[]} and []
+            
             const now = Date.now();
             const thirtySecsAgo = now - 30000;
             
@@ -84,8 +86,15 @@ export default function LiveTokensPage() {
             
             if (Array.isArray(trades)) {
               for (const t of trades) {
-                const tTs = Number(t.timestamp) * 1000;
-                if (tTs < thirtySecsAgo) break; // Trades are usually sorted desc
+                let tTs = NaN;
+                if (typeof t.timestamp === "number") {
+                  tTs = t.timestamp;
+                } else if (typeof t.timestamp === "string") {
+                  const num = Number(t.timestamp);
+                  tTs = Number.isFinite(num) ? num : Date.parse(t.timestamp);
+                }
+                if (Number.isFinite(tTs) && tTs < 1e12) tTs *= 1000; // handle seconds
+                if (!Number.isFinite(tTs) || tTs < thirtySecsAgo) continue;
                 if (t.type === "buy") buys++;
                 else if (t.type === "sell") sells++;
               }
@@ -172,7 +181,7 @@ export default function LiveTokensPage() {
     if (processed) {
       setSimState(simulator.getState());
     }
-  }, [coins, viewerCounts]);
+  }, [coins, viewerCounts, tradeCounts]);
 
   const fmtSol = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(3)} SOL`;
   const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%`;
@@ -691,7 +700,17 @@ export default function LiveTokensPage() {
                   Reset to Defaults
                 </button>
                 <button
-                  onClick={() => setShowSettings(false)}
+                  onClick={() => {
+                    if (simulatorRef.current) {
+                      simulatorRef.current.reset();
+                      setSimState(simulatorRef.current.getState());
+                    }
+                    setCoins([]);
+                    setViewerCounts({});
+                    setTradeCounts({});
+                    setShowSettings(false);
+                    fetchLiveTokens();
+                  }}
                   className="px-8 py-2 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] text-xs uppercase tracking-widest"
                 >
                   Save & Apply
