@@ -74,6 +74,42 @@ type HistoryPoint = {
   market_cap: number;
 };
 
+export type SimulatorConfig = {
+  // Buy Conditions
+  minViewers: number;
+  maxViewers: number;
+  viewerVelocity30s: number;
+  minMarketCap: number;
+  maxMarketCap: number;
+  minTokenAgeSeconds: number;
+  buyPressureRequired: boolean;
+  
+  // Sell Conditions
+  takeProfitRatio: number;
+  stopLossRatio: number;
+  viewerCollapseRatio: number;
+  timeExitMs: number;
+  trailingStopTriggerRatio: number;
+  trailingStopDropRatio: number;
+};
+
+export const DEFAULT_SIM_CONFIG: SimulatorConfig = {
+  minViewers: 8,
+  maxViewers: 25,
+  viewerVelocity30s: 4,
+  minMarketCap: 15_000,
+  maxMarketCap: 35_000,
+  minTokenAgeSeconds: 90,
+  buyPressureRequired: true,
+  
+  takeProfitRatio: 2.0,
+  stopLossRatio: 0.7,
+  viewerCollapseRatio: 0.6,
+  timeExitMs: 6 * 60 * 1000,
+  trailingStopTriggerRatio: 3.0,
+  trailingStopDropRatio: 0.8,
+};
+
 export class PumpfunLivestreamSimulator {
   private positions: Record<string, SimulatorPosition>;
   private history: Record<string, HistoryPoint[]>;
@@ -83,8 +119,9 @@ export class PumpfunLivestreamSimulator {
   private capital: number;
   private initialCapital: number;
   private riskPct: number;
+  private config: SimulatorConfig;
 
-  constructor(initialCapital = 5, riskPct = 0.02) {
+  constructor(initialCapital = 5, riskPct = 0.02, config: SimulatorConfig = DEFAULT_SIM_CONFIG) {
     this.positions = {};
     this.history = {};
     this.trades = [];
@@ -93,6 +130,11 @@ export class PumpfunLivestreamSimulator {
     this.initialCapital = initialCapital;
     this.capital = initialCapital;
     this.riskPct = riskPct;
+    this.config = config;
+  }
+
+  setSettings(newConfig: Partial<SimulatorConfig>) {
+    this.config = { ...this.config, ...newConfig };
   }
 
   update(token: LiveTokenUpdate) {
@@ -121,14 +163,14 @@ export class PumpfunLivestreamSimulator {
         const viewerVelocity = viewer_count - viewers30s;
         
         const results: CheckResult[] = [
-          { condition: "Min Viewers", status: viewer_count >= 8 ? "pass" : "fail", value: viewer_count, threshold: 8 },
-          { condition: "Max Viewers", status: viewer_count <= 25 ? "pass" : "fail", value: viewer_count, threshold: 25 },
-          { condition: "Viewer Velocity", status: viewerVelocity >= 4 ? "pass" : "fail", value: viewerVelocity, threshold: 4 },
+          { condition: "Min Viewers", status: viewer_count >= this.config.minViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.minViewers },
+          { condition: "Max Viewers", status: viewer_count <= this.config.maxViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.maxViewers },
+          { condition: "Viewer Velocity", status: viewerVelocity >= this.config.viewerVelocity30s ? "pass" : "fail", value: viewerVelocity, threshold: this.config.viewerVelocity30s },
           { condition: "Viewer Trend", status: viewer_count > viewers60s ? "pass" : "fail", value: viewer_count, threshold: `> ${viewers60s}` },
-          { condition: "Min Mcap", status: market_cap >= 15_000 ? "pass" : "fail", value: Math.round(market_cap), threshold: 15_000 },
-          { condition: "Max Mcap", status: market_cap <= 250_000 ? "pass" : "fail", value: Math.round(market_cap), threshold: 250_000 },
-          { condition: "Token Age", status: token.token_age > 90 ? "pass" : "fail", value: Math.round(token.token_age), threshold: 90 },
-          { condition: "Buy Pressure", status: token.buy_tx_last_30s > token.sell_tx_last_30s ? "pass" : "fail", value: token.buy_tx_last_30s, threshold: `> ${token.sell_tx_last_30s}` }
+          { condition: "Min Mcap", status: market_cap >= this.config.minMarketCap ? "pass" : "fail", value: Math.round(market_cap), threshold: this.config.minMarketCap },
+          { condition: "Max Mcap", status: market_cap <= this.config.maxMarketCap ? "pass" : "fail", value: Math.round(market_cap), threshold: this.config.maxMarketCap },
+          { condition: "Token Age", status: token.token_age > this.config.minTokenAgeSeconds ? "pass" : "fail", value: Math.round(token.token_age), threshold: this.config.minTokenAgeSeconds },
+          { condition: "Buy Pressure", status: !this.config.buyPressureRequired || token.buy_tx_last_30s > token.sell_tx_last_30s ? "pass" : "fail", value: token.buy_tx_last_30s, threshold: `> ${token.sell_tx_last_30s}` }
         ];
 
         const meetsEntry = results.every(r => r.status === "pass");
@@ -171,12 +213,13 @@ export class PumpfunLivestreamSimulator {
       pos.peakMarketCap = market_cap;
     }
 
-    const takeProfit = market_cap >= pos.entryMarketCap * 2;
-    const stopLoss = market_cap <= pos.entryMarketCap * 0.7;
-    const viewerCollapse = viewer_count <= pos.entryViewers * 0.6;
-    const timeExit = timestamp - pos.entryTimestamp >= 6 * 60 * 1000;
+    const takeProfit = market_cap >= pos.entryMarketCap * this.config.takeProfitRatio;
+    const stopLoss = market_cap <= pos.entryMarketCap * this.config.stopLossRatio;
+    const viewerCollapse = viewer_count <= pos.entryViewers * this.config.viewerCollapseRatio;
+    const timeExit = timestamp - pos.entryTimestamp >= this.config.timeExitMs;
     const trailingStop =
-      pos.peakMarketCap >= pos.entryMarketCap * 3 && market_cap <= pos.peakMarketCap * 0.8;
+      pos.peakMarketCap >= pos.entryMarketCap * this.config.trailingStopTriggerRatio && 
+      market_cap <= pos.peakMarketCap * this.config.trailingStopDropRatio;
 
     if (takeProfit) {
       this.closePosition(mint, market_cap, timestamp, "take_profit");

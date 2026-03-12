@@ -2,17 +2,20 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, Search, RefreshCw, AlertCircle } from "lucide-react";
+import { Activity, Search, RefreshCw, AlertCircle, Settings, X, RotateCcw } from "lucide-react";
 import { type PumpFunCoin } from "@/types/pumpfun";
 import LiveTokenGrid from "@/components/LiveTokenGrid";
 import {
   PumpfunLivestreamSimulator,
-  type SimulatorState
+  type SimulatorState,
+  type SimulatorConfig,
+  DEFAULT_SIM_CONFIG
 } from "@/lib/pumpfunSimulator";
 
 export default function LiveTokensPage() {
   const [coins, setCoins] = useState<PumpFunCoin[]>([]);
   const [viewerCounts, setViewerCounts] = useState<Record<string, number>>({});
+  const [tradeCounts, setTradeCounts] = useState<Record<string, { buy: number; sell: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -31,44 +34,74 @@ export default function LiveTokensPage() {
       avgHoldMs: 0
     }
   }));
+  const [showSettings, setShowSettings] = useState(false);
+  const [config, setConfig] = useState<SimulatorConfig>(DEFAULT_SIM_CONFIG);
 
   const isFetchingViewers = useRef(false);
   const simulatorRef = useRef<PumpfunLivestreamSimulator | null>(null);
 
   if (!simulatorRef.current) {
-    simulatorRef.current = new PumpfunLivestreamSimulator(5, 0.02);
+    simulatorRef.current = new PumpfunLivestreamSimulator(5, 0.02, config);
   }
 
-  const fetchViewerCountsSequentially = async (coinsList: PumpFunCoin[]) => {
+  // Update simulator when config changes
+  useEffect(() => {
+    if (simulatorRef.current) {
+      simulatorRef.current.setSettings(config);
+    }
+  }, [config]);
+
+  const fetchTokenDetailsSequentially = async (coinsList: PumpFunCoin[]) => {
     if (isFetchingViewers.current) return;
     isFetchingViewers.current = true;
 
     try {
       for (const coin of coinsList) {
-        let success = false;
-        while (!success) {
-          try {
-            const res = await fetch(`/api/viewers/${coin.mint}`);
-            if (res.ok) {
-              const data = await res.json();
-              setViewerCounts(prev => ({
-                ...prev,
-                [coin.mint]: data.count ?? data
-              }));
-              success = true;
-            } else {
-              // If we get an error (like 429), wait longer before retrying
-              console.warn(`Fetch failed for ${coin.mint}, retrying in 2s...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-          } catch (err) {
-            console.error(`Error fetching viewers for ${coin.mint}:`, err);
-            // Wait before retry on network error too
-            await new Promise(resolve => setTimeout(resolve, 2000));
+        // 1. Fetch Viewers
+        try {
+          const vRes = await fetch(`/api/viewers/${coin.mint}`);
+          if (vRes.ok) {
+            const vData = await vRes.json();
+            setViewerCounts(prev => ({
+              ...prev,
+              [coin.mint]: vData.count ?? vData
+            }));
           }
+        } catch (err) {
+          console.error(`Error fetching viewers for ${coin.mint}:`, err);
         }
-        // Small delay between successful requests to be safe
-        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 2. Fetch Trades for Pressure
+        try {
+          const tRes = await fetch(`/api/pumpfun/trades/${coin.mint}?limit=50`);
+          if (tRes.ok) {
+            const trades = await tRes.json();
+            const now = Date.now();
+            const thirtySecsAgo = now - 30000;
+            
+            let buys = 0;
+            let sells = 0;
+            
+            if (Array.isArray(trades)) {
+              for (const t of trades) {
+                const tTs = Number(t.timestamp) * 1000;
+                if (tTs < thirtySecsAgo) break; // Trades are usually sorted desc
+                if (t.type === "buy") buys++;
+                else if (t.type === "sell") sells++;
+              }
+            }
+
+            setTradeCounts(prev => ({
+              ...prev,
+              [coin.mint]: { buy: buys, sell: sells }
+            }));
+          }
+        } catch (err) {
+          console.error(`Error fetching trades for ${coin.mint}:`, err);
+        }
+
+        // Small delay between tokens to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     } finally {
       isFetchingViewers.current = false;
@@ -86,8 +119,8 @@ export default function LiveTokensPage() {
       setCoins(data);
       setLastUpdated(new Date());
       
-      // Trigger sequential viewer count fetching
-      fetchViewerCountsSequentially(data);
+      // Trigger sequential token detail fetching
+      fetchTokenDetailsSequentially(data);
     } catch (err) {
       console.error("Error fetching live tokens:", err);
       setError("Failed to load live streams. Please try again later.");
@@ -117,8 +150,10 @@ export default function LiveTokensPage() {
       const createdMs =
         coin.created_timestamp > 1e12 ? coin.created_timestamp : coin.created_timestamp * 1000;
       const token_age = Math.max(0, (Date.now() - createdMs) / 1000);
-      const buy_tx_last_30s = Number((coin as { buy_tx_last_30s?: number }).buy_tx_last_30s ?? 0);
-      const sell_tx_last_30s = Number((coin as { sell_tx_last_30s?: number }).sell_tx_last_30s ?? 0);
+      
+      const tc = tradeCounts[coin.mint] || { buy: 0, sell: 0 };
+      const buy_tx_last_30s = tc.buy;
+      const sell_tx_last_30s = tc.sell;
 
       simulator.update({
         mint: coin.mint,
@@ -262,6 +297,13 @@ export default function LiveTokensPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-all mr-2"
+                  title="Simulator Settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
                 <div className="px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl">
                   <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Current Capital</div>
                   <div className="text-white font-mono font-bold text-lg">
@@ -454,6 +496,211 @@ export default function LiveTokensPage() {
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettings(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#0c0c10] border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                    <Settings className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Simulator Settings</h3>
+                </div>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="p-2 rounded-xl hover:bg-white/5 text-zinc-500 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Buy Conditions */}
+                  <div className="space-y-6">
+                    <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">Buy Conditions</h4>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Viewer Range (Min / Max)</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={config.minViewers}
+                            onChange={(e) => setConfig({ ...config, minViewers: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                          <span className="text-zinc-600">—</span>
+                          <input
+                            type="number"
+                            value={config.maxViewers}
+                            onChange={(e) => setConfig({ ...config, maxViewers: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Viewer Velocity (+ in 30s)</label>
+                        <input
+                          type="number"
+                          value={config.viewerVelocity30s}
+                          onChange={(e) => setConfig({ ...config, viewerVelocity30s: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Market Cap (Min / Max USD)</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={config.minMarketCap}
+                            onChange={(e) => setConfig({ ...config, minMarketCap: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                          <span className="text-zinc-600">—</span>
+                          <input
+                            type="number"
+                            value={config.maxMarketCap}
+                            onChange={(e) => setConfig({ ...config, maxMarketCap: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Min Token Age (Seconds)</label>
+                        <input
+                          type="number"
+                          value={config.minTokenAgeSeconds}
+                          onChange={(e) => setConfig({ ...config, minTokenAgeSeconds: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Require Buy Pressure</label>
+                        <button
+                          onClick={() => setConfig({ ...config, buyPressureRequired: !config.buyPressureRequired })}
+                          className={`w-10 h-5 rounded-full transition-all relative ${config.buyPressureRequired ? 'bg-blue-500' : 'bg-zinc-700'}`}
+                        >
+                          <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${config.buyPressureRequired ? 'left-6' : 'left-1'}`} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sell Conditions */}
+                  <div className="space-y-6">
+                    <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">Sell Conditions</h4>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Take Profit (Multiplier, e.g., 2.0)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={config.takeProfitRatio}
+                          onChange={(e) => setConfig({ ...config, takeProfitRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Stop Loss (Multiplier, e.g., 0.7)</label>
+                        <input
+                          type="number"
+                          step="0.05"
+                          value={config.stopLossRatio}
+                          onChange={(e) => setConfig({ ...config, stopLossRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Viewer Collapse (Multiplier, e.g., 0.6)</label>
+                        <input
+                          type="number"
+                          step="0.05"
+                          value={config.viewerCollapseRatio}
+                          onChange={(e) => setConfig({ ...config, viewerCollapseRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Time Exit (Minutes)</label>
+                        <input
+                          type="number"
+                          value={config.timeExitMs / 60000}
+                          onChange={(e) => setConfig({ ...config, timeExitMs: Number(e.target.value) * 60000 })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Trailing Stop (Trigger / Drop)</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={config.trailingStopTriggerRatio}
+                            onChange={(e) => setConfig({ ...config, trailingStopTriggerRatio: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                          <span className="text-zinc-600">—</span>
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={config.trailingStopDropRatio}
+                            onChange={(e) => setConfig({ ...config, trailingStopDropRatio: Number(e.target.value) })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-6 border-t border-white/5 flex items-center justify-between gap-4 bg-white/[0.02]">
+                <button
+                  onClick={() => setConfig(DEFAULT_SIM_CONFIG)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-bold text-xs uppercase tracking-widest"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset to Defaults
+                </button>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="px-8 py-2 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] text-xs uppercase tracking-widest"
+                >
+                  Save & Apply
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
