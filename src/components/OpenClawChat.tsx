@@ -352,6 +352,7 @@ export default function OpenClawChat({
                 twitterUrl={collectedPayload.twitter ?? ""}
                 telegramUrl={collectedPayload.telegram ?? ""}
                 description={collectedPayload.description}
+                seedPayload={collectedPayload}
                 onSuccess={onLaunchSuccess}
               />
             ) : (

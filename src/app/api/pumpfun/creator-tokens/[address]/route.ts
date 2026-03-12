@@ -27,21 +27,26 @@ export async function GET(
     }
 
     try {
-        const coins = JSON.parse(text);
-        if (!Array.isArray(coins)) {
-            return NextResponse.json({ success: true, total: 0, bonded: 0, coins: [] });
+        const raw = JSON.parse(text) as unknown;
+        const coins = Array.isArray(raw)
+            ? raw
+            : Array.isArray((raw as { coins?: unknown[] })?.coins)
+                ? (raw as { coins: unknown[] }).coins
+                : [];
+        if (coins.length === 0) {
+            return NextResponse.json({ success: true, total: 0, bonded: 0, successRate: 0, coins: [] });
         }
 
         const total = coins.length;
-        const bonded = coins.filter((c: any) => c.complete === true).length;
+        const bonded = coins.filter((c: { complete?: boolean }) => c.complete === true).length;
         const successRate = total > 0 ? Math.round((bonded / total) * 100) : 0;
 
-        return NextResponse.json({ 
-            success: true, 
-            total, 
-            bonded, 
+        return NextResponse.json({
+            success: true,
+            total,
+            bonded,
             successRate,
-            coins: coins.map(c => ({
+            coins: coins.map((c: { mint?: string; symbol?: string; name?: string; image_uri?: string; complete?: boolean; usd_market_cap?: number }) => ({
                 mint: c.mint,
                 symbol: c.symbol,
                 name: c.name,
