@@ -43,7 +43,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#060608]/80 backdrop-blur-xl">
+    <nav className="sticky top-0 z-[1100] border-b border-white/5 bg-[#060608]/80 backdrop-blur-xl">
       <div className="px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group text-white">
           <EveLogoIcon className="w-7 h-7 shrink-0" />
@@ -74,7 +74,7 @@ export default function Navbar() {
               <span className="relative z-10 ml-1 opacity-70">▾</span>
             </button>
             {bipOpen && (
-              <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-[#111113] border border-white/10 shadow-xl z-50">
+              <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-[#111113] border border-white/10 shadow-xl z-[1100]">
                 {BIP_OPTIONS.map((opt) =>
                   opt.external ? (
                     <a

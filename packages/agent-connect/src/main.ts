@@ -13,6 +13,9 @@ let mainWindow: BrowserWindow | null = null;
 let sshClient: Client | null = null;
 let sshStream: { write: (d: string) => void; setWindow?: (r: number, c: number, h: number, w: number) => void } | null = null;
 
+/** Path from macOS open-file (double-click) when app was not running; consumed in whenReady. */
+let pendingOpenFilePath: string | null = null;
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -41,18 +44,39 @@ function sendToRenderer(channel: string, ...args: unknown[]): void {
   }
 }
 
+function isBundlePath(p: string): boolean {
+  return p.endsWith(".opencaw") || p.endsWith(".json");
+}
+
+function loadBundleFromPathAndConnect(bundlePath: string): void {
+  setImmediate(() => {
+    try {
+      const json = fs.readFileSync(bundlePath, "utf8");
+      connectWithBundle(parseBundle(json));
+    } catch (e) {
+      sendToRenderer("ssh-error", e instanceof Error ? e.message : "Failed to load bundle");
+    }
+  });
+}
+
+// macOS: when user double-clicks a .opencaw file, the path is delivered here (not in argv).
+app.on("open-file", (event, pathToOpen) => {
+  event.preventDefault();
+  if (!isBundlePath(pathToOpen)) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    loadBundleFromPathAndConnect(pathToOpen);
+  } else {
+    pendingOpenFilePath = pathToOpen;
+  }
+});
+
 app.whenReady().then(() => {
   createWindow();
-  const bundlePath = process.argv.find((a) => a.endsWith(".opencaw"));
+  const bundlePath =
+    process.argv.find((a) => isBundlePath(a)) ?? pendingOpenFilePath;
   if (bundlePath) {
-    setImmediate(() => {
-      try {
-        const json = fs.readFileSync(bundlePath, "utf8");
-        connectWithBundle(parseBundle(json));
-      } catch (e) {
-        sendToRenderer("ssh-error", e instanceof Error ? e.message : "Failed to load bundle");
-      }
-    });
+    pendingOpenFilePath = null;
+    loadBundleFromPathAndConnect(bundlePath);
   }
 });
 
@@ -82,6 +106,8 @@ function connectWithBundle(bundle: AgentConnectionBundle): void {
           stream.on("data", (data: Buffer) => sendToRenderer("ssh-data", data.toString("utf8")));
           if (stream.stderr) stream.stderr.on("data", (data: Buffer) => sendToRenderer("ssh-data", data.toString("utf8")));
           stream.on("close", () => sendToRenderer("ssh-close"));
+          // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
+          stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
         });
       })
     .on("error", (err: Error) => {
@@ -169,6 +195,8 @@ ipcMain.handle("connect", async (_event: unknown, bundle: AgentConnectionBundle)
           stream.on("data", (data: Buffer) => sendToRenderer("ssh-data", data.toString("utf8")));
           stream.stderr.on("data", (data: Buffer) => sendToRenderer("ssh-data", data.toString("utf8")));
           stream.on("close", () => sendToRenderer("ssh-close"));
+          // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
+          stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
           resolve({ ok: true });
         });
       })

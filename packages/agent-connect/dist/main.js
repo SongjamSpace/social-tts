@@ -46,6 +46,8 @@ else {
     let mainWindow = null;
     let sshClient = null;
     let sshStream = null;
+    /** Path from macOS open-file (double-click) when app was not running; consumed in whenReady. */
+    let pendingOpenFilePath = null;
     function createWindow() {
         mainWindow = new electron_1.BrowserWindow({
             width: 900,
@@ -72,19 +74,38 @@ else {
             mainWindow.webContents.send(channel, ...args);
         }
     }
+    function isBundlePath(p) {
+        return p.endsWith(".opencaw") || p.endsWith(".json");
+    }
+    function loadBundleFromPathAndConnect(bundlePath) {
+        setImmediate(() => {
+            try {
+                const json = fs.readFileSync(bundlePath, "utf8");
+                connectWithBundle((0, bundle_1.parseBundle)(json));
+            }
+            catch (e) {
+                sendToRenderer("ssh-error", e instanceof Error ? e.message : "Failed to load bundle");
+            }
+        });
+    }
+    // macOS: when user double-clicks a .opencaw file, the path is delivered here (not in argv).
+    electron_1.app.on("open-file", (event, pathToOpen) => {
+        event.preventDefault();
+        if (!isBundlePath(pathToOpen))
+            return;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            loadBundleFromPathAndConnect(pathToOpen);
+        }
+        else {
+            pendingOpenFilePath = pathToOpen;
+        }
+    });
     electron_1.app.whenReady().then(() => {
         createWindow();
-        const bundlePath = process.argv.find((a) => a.endsWith(".opencaw"));
+        const bundlePath = process.argv.find((a) => isBundlePath(a)) ?? pendingOpenFilePath;
         if (bundlePath) {
-            setImmediate(() => {
-                try {
-                    const json = fs.readFileSync(bundlePath, "utf8");
-                    connectWithBundle((0, bundle_1.parseBundle)(json));
-                }
-                catch (e) {
-                    sendToRenderer("ssh-error", e instanceof Error ? e.message : "Failed to load bundle");
-                }
-            });
+            pendingOpenFilePath = null;
+            loadBundleFromPathAndConnect(bundlePath);
         }
     });
     /** Normalize PEM string so ssh2 accepts it (trim, fix line endings). */
@@ -114,6 +135,8 @@ else {
                 if (stream.stderr)
                     stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                 stream.on("close", () => sendToRenderer("ssh-close"));
+                // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
+                stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
             });
         })
             .on("error", (err) => {
@@ -198,6 +221,8 @@ else {
                     stream.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                     stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                     stream.on("close", () => sendToRenderer("ssh-close"));
+                    // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
+                    stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
                     resolve({ ok: true });
                 });
             })

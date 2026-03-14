@@ -29,7 +29,7 @@ export default function OpenClawPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center bg-[#060608] text-white px-4 py-8 relative z-[1000]">
+    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center bg-[#060608] text-white px-4 py-8">
       <div className="w-full max-w-2xl relative">
         <div className="text-center mb-10">
           <h1
@@ -44,7 +44,7 @@ export default function OpenClawPage() {
         </div>
 
         {step === 1 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-6 relative z-[1001] isolate">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-6">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
                 API key

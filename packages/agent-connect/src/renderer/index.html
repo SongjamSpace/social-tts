@@ -23,16 +23,13 @@
   </style>
 </head>
 <body>
-  <input type="file" id="file-input" accept=".opencaw,.json,application/json" style="display: none" />
   <div id="app">
     <div id="toolbar">
-      <button type="button" id="btn-open">Import connection file</button>
-      <button type="button" id="btn-connect" class="primary" disabled>Connect</button>
-      <span id="status">Import a .opencaw file to connect</span>
+      <span id="status">Open a .opencaw file to connect</span>
     </div>
     <div id="welcome">
       <h1>Agent Connect</h1>
-      <p>Import a connection file (.opencaw) from your spawn success page, or open one from the command line.</p>
+      <p>Double-click a .opencaw connection file (from your spawn success page) to connect to your droplet.</p>
     </div>
     <div id="terminal-container" style="display: none;">
       <div id="terminal"></div>
