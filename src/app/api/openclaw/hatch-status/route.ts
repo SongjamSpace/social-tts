@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/services/firebase-admin.service";
-import { getAppDeploymentStatus } from "@/lib/digitalocean";
+import { getAppDeploymentStatus, getDropletStatus } from "@/lib/digitalocean";
 
 const OPENCLAW_LAUNCHES = "openclaw_launches";
 const HATCH_DEPLOYMENTS = "hatch_deployments";
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     }
     const launch = launchSnap.data()!;
 
+    const deployDropletId = launch.deployDropletId;
     const deployAppId = launch.deployAppId;
     const agentUrl = launch.agentUrl;
     const gatewayToken = launch.gatewayToken;
@@ -37,6 +38,54 @@ export async function GET(request: Request) {
       });
     }
 
+    // Droplet path: poll droplet until active and we have agentUrl
+    if (deployDropletId && typeof deployDropletId === "string") {
+      const dropletStatus = await getDropletStatus(deployDropletId);
+      if (dropletStatus.dropletNotFound) {
+        await launchRef.update({
+          deployDropletId: null,
+          hatchStatus: null,
+        });
+        return NextResponse.json({
+          status: "deleted",
+          message: "The deployment was removed. You can hatch again to create a new agent.",
+        });
+      }
+      if (dropletStatus.agentUrl) {
+        const url = dropletStatus.agentUrl.trim();
+        await launchRef.update({
+          agentUrl: url,
+          deployDropletId: null,
+          hatchStatus: "hatched",
+        });
+        await db.collection(HATCH_DEPLOYMENTS).add({
+          mint,
+          doId: deployDropletId,
+          agentUrl: url,
+          status: "deployed",
+          createdAt: new Date(),
+        });
+        return NextResponse.json({
+          status: "live",
+          agentUrl: url,
+          gatewayToken: gatewayToken ?? null,
+        });
+      }
+      const dropletMessage =
+        dropletStatus.status === "active"
+          ? "Waiting for gateway…"
+          : dropletStatus.status
+            ? `Droplet ${dropletStatus.status}…`
+            : "Starting droplet…";
+      return NextResponse.json({
+        status: "deploying",
+        phase: dropletStatus.status ?? null,
+        progress: null,
+        message: dropletMessage,
+      });
+    }
+
+    // App Platform path
     if (!deployAppId || typeof deployAppId !== "string") {
       return NextResponse.json({
         status: "unknown",
@@ -44,7 +93,8 @@ export async function GET(request: Request) {
       });
     }
 
-    const { defaultIngress, phase, progress, appNotFound } = await getAppDeploymentStatus(deployAppId);
+    const { defaultIngress, phase, progress, appNotFound } =
+      await getAppDeploymentStatus(deployAppId);
 
     if (appNotFound) {
       await launchRef.update({

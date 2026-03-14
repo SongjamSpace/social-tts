@@ -9,7 +9,7 @@ import OpenClawLaunch, { type OpenClawLaunchProps } from "@/components/OpenClawL
  * When info is collected, show Connect wallet in the same chat UI.
  * Once connected, show the launch button (gas only, no dev buys/splits/Eve fee for MVP).
  */
-export default function OpenClawConnectAndLaunch(props: OpenClawLaunchProps) {
+export default function AgentConnectAndLaunch(props: OpenClawLaunchProps) {
   const { ready, connectWallet } = usePrivy();
   const { wallets } = useWallets();
   const [connecting, setConnecting] = useState(false);
@@ -35,7 +35,7 @@ export default function OpenClawConnectAndLaunch(props: OpenClawLaunchProps) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-zinc-500">
-        Connect your wallet to deploy. You’ll only pay gas — no liquidity seeding, dev buys, or fees for this MVP.
+        Connect your wallet to deploy. You'll only pay gas — no liquidity seeding, dev buys, or fees for this MVP.
       </p>
       <button
         type="button"

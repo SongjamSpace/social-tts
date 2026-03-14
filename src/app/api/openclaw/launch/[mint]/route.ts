@@ -35,6 +35,7 @@ export async function GET(
         agentUrl: d.agentUrl ?? null,
         hatchStatus: d.hatchStatus ?? null,
         gatewayToken: d.gatewayToken ?? null,
+        dropletIp: d.dropletIp ?? null,
       },
     });
   } catch (e) {

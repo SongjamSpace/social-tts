@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         createdAt: d.createdAt?.toMillis?.() ?? null,
         agentUrl: d.agentUrl ?? null,
         hatchStatus: d.hatchStatus ?? null,
+        dropletIp: d.dropletIp ?? null,
       };
     });
 

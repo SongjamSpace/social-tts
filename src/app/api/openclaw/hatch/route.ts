@@ -1,7 +1,11 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/services/firebase-admin.service";
-import { createOpenClawApp } from "@/lib/digitalocean";
+import {
+  createOpenClawApp,
+  createOpenClawDroplet,
+  useDropletDeploy,
+} from "@/lib/digitalocean";
 
 const OPENCLAW_LAUNCHES = "openclaw_launches";
 const HATCH_INTENTS = "hatch_intents";
@@ -75,19 +79,40 @@ export async function POST(request: Request) {
     }
 
     const gatewayToken = randomBytes(32).toString("hex");
+    const useDroplet = useDropletDeploy();
     let agentUrl: string | null = null;
     let doId: string | null = null;
+    let deployDropletId: string | null = null;
+    let deployAppId: string | null = null;
+
     try {
-      const result = await createOpenClawApp({
-        mint,
-        apiKey: apiKey || undefined,
-        seedMemoriesJson: JSON.stringify(seedPayload),
-        gatewayToken,
-      });
-      doId = result.appId;
-      agentUrl = result.defaultIngress && typeof result.defaultIngress === "string"
-        ? result.defaultIngress.trim()
-        : null;
+      if (useDroplet) {
+        const result = await createOpenClawDroplet({
+          mint,
+          apiKey: apiKey || undefined,
+          seedMemoriesJson: JSON.stringify(seedPayload),
+          gatewayToken,
+        });
+        doId = result.dropletId;
+        deployDropletId = result.dropletId;
+        agentUrl =
+          result.agentUrl && typeof result.agentUrl === "string"
+            ? result.agentUrl.trim()
+            : null;
+      } else {
+        const result = await createOpenClawApp({
+          mint,
+          apiKey: apiKey || undefined,
+          seedMemoriesJson: JSON.stringify(seedPayload),
+          gatewayToken,
+        });
+        doId = result.appId;
+        deployAppId = result.appId;
+        agentUrl =
+          result.defaultIngress && typeof result.defaultIngress === "string"
+            ? result.defaultIngress.trim()
+            : null;
+      }
     } catch (e) {
       console.error("[openclaw/hatch] DigitalOcean create failed:", e);
       const message = e instanceof Error ? e.message : "Unknown error";
@@ -98,17 +123,26 @@ export async function POST(request: Request) {
     }
 
     if (!agentUrl) {
-      await launchRef.update({
-        deployAppId: doId,
+      const updatePayload: Record<string, unknown> = {
         gatewayToken,
         hatchStatus: "deploying",
         hatchedAt: new Date(),
-      });
+      };
+      if (useDroplet && deployDropletId) {
+        updatePayload.deployDropletId = deployDropletId;
+        updatePayload.deployAppId = null;
+      } else {
+        updatePayload.deployAppId = doId;
+        updatePayload.deployDropletId = null;
+      }
+      await launchRef.update(updatePayload);
       return NextResponse.json({
         status: "deploying",
         appId: doId,
         gatewayToken,
-        message: "App created. Deployment in progress—this page will update as DigitalOcean builds and deploys your agent.",
+        message: useDroplet
+          ? "Droplet created. Deployment in progress—this page will update once the gateway is ready."
+          : "App created. Deployment in progress—this page will update as DigitalOcean builds and deploys your agent.",
       });
     }
 
@@ -117,6 +151,8 @@ export async function POST(request: Request) {
       gatewayToken,
       hatchStatus: "hatched",
       hatchedAt: new Date(),
+      deployAppId: null,
+      deployDropletId: null,
     });
 
     await db.collection(HATCH_DEPLOYMENTS).add({

@@ -19,6 +19,7 @@ interface LaunchRecord {
   createdAt: number | null;
   agentUrl: string | null;
   hatchStatus: string | null;
+  dropletIp: string | null;
 }
 
 export default function ProfileWalletPage({
@@ -145,7 +146,7 @@ export default function ProfileWalletPage({
                 const launch = launchByMint.get(item.mint);
                 const coin = item;
                 const bonded = coin.complete === true;
-                const hatched = Boolean(launch?.hatchStatus === "hatched" || launch?.agentUrl);
+                const hasDroplet = Boolean(launch?.dropletIp || launch?.hatchStatus === "spawned" || launch?.hatchStatus === "spawning");
                 return (
                   <li
                     key={coin.mint}
@@ -177,34 +178,27 @@ export default function ProfileWalletPage({
                         >
                           {bonded ? "Bonded" : "Not bonded"}
                         </span>
-                        {hatched && (
+                        {hasDroplet && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-400">
-                            Hatched
+                            Droplet
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col gap-1">
-                      {hatched && launch?.agentUrl ? (
+                      {hasDroplet ? (
                         <Link
-                          href={`/hatch/${encodeURIComponent(coin.mint)}/onboarding`}
+                          href={`/spawn/${encodeURIComponent(coin.mint)}`}
                           className="rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
                         >
-                          Open agent
+                          SSH instructions
                         </Link>
-                      ) : hatched && launch && !launch?.agentUrl ? (
+                      ) : bonded && launch ? (
                         <Link
-                          href={`/hatch/${encodeURIComponent(coin.mint)}/onboarding`}
-                          className="rounded-lg bg-amber-500/80 hover:bg-amber-500 text-white text-xs font-semibold px-3 py-2 text-center"
-                        >
-                          Complete deployment
-                        </Link>
-                      ) : bonded && launch && !hatched ? (
-                        <Link
-                          href={`/hatch/${encodeURIComponent(coin.mint)}/onboarding`}
+                          href={`/spawn/${encodeURIComponent(coin.mint)}`}
                           className="rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
                         >
-                          Ready to hatch
+                          Spawn droplet
                         </Link>
                       ) : null}
                       <a

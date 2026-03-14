@@ -1,0 +1,44 @@
+{
+  "name": "agent-connect",
+  "version": "0.1.0",
+  "description": "Agent Connect – SSH to your agent droplet",
+  "main": "dist/main.js",
+  "author": "EVE.Army",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/ && mkdir -p dist/renderer/vendor && cp node_modules/xterm/css/xterm.css node_modules/xterm/lib/xterm.js dist/renderer/vendor/ && cp node_modules/xterm-addon-fit/lib/xterm-addon-fit.js dist/renderer/vendor/",
+    "start": "npm run build && electron .",
+    "start:minimal": "npm run build && AGENT_CONNECT_MINIMAL=1 electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "ai.eve.agentconnect",
+    "productName": "Agent Connect",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "files": [
+      "dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  },
+  "dependencies": {
+    "ssh2": "^1.15.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "electron": "27.3.11",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.0.0"
+  }
+}
