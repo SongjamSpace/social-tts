@@ -477,9 +477,9 @@ KEY`;
                   Droplet is finishing setup. Wait 1–2 minutes before connecting, or you may see connection or authentication errors.
                 </p>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-2">2. Download your connection file</p>
+                  <p className="text-sm font-semibold text-white mb-2">2. Download the connection file and double-click to open in Agent Connect</p>
                   <p className="text-zinc-400 text-sm mb-3">
-                    After installing the app, download this file and open it with Agent Connect (or drag it into the app).
+                    Download the file below, then double-click it. Agent Connect will open with this connection—no need to use Import inside the app.
                   </p>
                   <button
                     type="button"
@@ -506,13 +506,13 @@ KEY`;
                     Download connection file
                   </button>
                   <p className="text-zinc-500 text-[10px] mt-2">
-                    This file contains your private key. Store it securely and open it only in Agent Connect.
+                    This file contains your private key. Store it securely. Double-click the file after download to open it in Agent Connect (no need to use Import inside the app).
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white mb-2">3. Connect and install your agent</p>
                   <p className="text-zinc-400 text-sm mb-2">
-                    Open Agent Connect, import the connection file, and click Connect. You’ll get a terminal session on your droplet—then follow the{" "}
+                    When Agent Connect opens from the file, click Connect. You’ll get a terminal session on your droplet—then follow the{" "}
                     <a href="https://docs.openclaw.ai" target="_blank" rel="noopener noreferrer" className="text-red-400 hover:text-red-300">
                       OpenClaw docs
                     </a>{" "}

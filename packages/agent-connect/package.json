@@ -16,6 +16,9 @@
   "build": {
     "appId": "ai.eve.agentconnect",
     "productName": "Agent Connect",
+    "fileAssociations": [
+      { "ext": "opencaw", "name": "OpenClaw connection", "role": "Editor" }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
