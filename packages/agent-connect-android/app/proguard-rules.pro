@@ -1,0 +1,2 @@
+-dontwarn com.hierynomus.**
+-keep class com.hierynomus.sshj.** { *; }
