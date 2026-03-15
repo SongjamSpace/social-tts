@@ -109,6 +109,8 @@ export default function ProfileWalletPage({
     "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve": 100_000,
     "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
   };
+  // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
+  const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
   const displayTokens = agentTokens.map((item) => {
     const overrideCap = TEST_MINT_BONDED_OVERRIDES[item.mint];
     if (overrideCap != null) return { ...item, complete: true, usd_market_cap: overrideCap };
@@ -207,16 +209,19 @@ export default function ProfileWalletPage({
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col gap-1 items-end">
-                      {bonded && (hasDroplet || launch) && (
+                      {((bonded && (hasDroplet || launch)) ||
+                        TEST_MINT_BONDED_OVERRIDES[coin.mint] != null) && (
                         <Link
                           href={`/spawn/${encodeURIComponent(coin.mint)}`}
                           className={
-                            hasDroplet
+                            hasDroplet || coin.mint === TEST_MINT_AGENT_CONNECT
                               ? "rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
                               : "rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
                           }
                         >
-                          {hasDroplet ? "Agent Connect" : "Spawn droplet"}
+                          {hasDroplet || coin.mint === TEST_MINT_AGENT_CONNECT
+                            ? "Agent Connect"
+                            : "Spawn droplet"}
                         </Link>
                       )}
                       <a
