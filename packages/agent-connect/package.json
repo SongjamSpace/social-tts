@@ -6,7 +6,7 @@
   "author": "EVE.Army",
   "license": "MIT",
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/ && mkdir -p dist/renderer/vendor && cp node_modules/xterm/css/xterm.css node_modules/xterm/lib/xterm.js dist/renderer/vendor/ && cp node_modules/xterm-addon-fit/lib/xterm-addon-fit.js dist/renderer/vendor/",
+    "build": "tsc && tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/ && mkdir -p dist/renderer/vendor dist/renderer/assets && cp node_modules/xterm/css/xterm.css node_modules/xterm/lib/xterm.js dist/renderer/vendor/ && cp node_modules/xterm-addon-fit/lib/xterm-addon-fit.js dist/renderer/vendor/ && cp src/renderer/assets/eve-logo.png dist/renderer/assets/",
     "start": "npm run build && electron .",
     "start:minimal": "npm run build && AGENT_CONNECT_MINIMAL=1 electron .",
     "pack": "npm run build && electron-builder --dir",
@@ -17,17 +17,31 @@
     "appId": "ai.eve.agentconnect",
     "productName": "Agent Connect",
     "fileAssociations": [
-      { "ext": "opencaw", "name": "OpenClaw connection", "role": "Editor" }
+      { "ext": "droplet", "name": "Droplet connection", "role": "Editor", "rank": "Owner" }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.png",
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "extendInfo": {
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "ai.eve.agentconnect.droplet",
+            "UTTypeConformsTo": ["public.data"],
+            "UTTypeDescription": "Agent Connect droplet connection",
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["droplet"]
+            }
+          }
+        ]
+      }
     },
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      "assets/**/*"
     ],
     "directories": {
       "output": "release"

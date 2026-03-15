@@ -1,4 +1,4 @@
-/** Connection bundle format (matches web app .opencaw file). */
+/** Connection bundle format (matches web app .droplet file). */
 export interface AgentConnectionBundle {
   version: 1;
   host: string;

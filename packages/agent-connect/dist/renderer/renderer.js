@@ -5,9 +5,33 @@ const Terminal = w.Terminal;
 const FitAddon = w.FitAddon;
 let terminal = null;
 let fitAddon = null;
+let splashEl = null;
+let splashStatusEl = null;
+let splashErrorEl = null;
+let appEl = null;
 let welcomeEl = null;
 let terminalContainer = null;
 let statusEl = null;
+function setSplashStatus(msg) {
+    if (splashStatusEl)
+        splashStatusEl.textContent = msg;
+}
+function showSplashError(msg) {
+    if (splashErrorEl) {
+        splashErrorEl.textContent = msg;
+        splashErrorEl.style.display = "block";
+    }
+}
+function hideSplashError() {
+    if (splashErrorEl) {
+        splashErrorEl.textContent = "";
+        splashErrorEl.style.display = "none";
+    }
+}
+function hideSplash() {
+    if (splashEl)
+        splashEl.classList.add("hidden");
+}
 function setStatus(msg) {
     if (statusEl)
         statusEl.textContent = msg;
@@ -20,12 +44,6 @@ function showTerminal() {
     if (terminal && fitAddon) {
         setTimeout(() => fitAddon.fit(), 50);
     }
-}
-function showWelcome() {
-    if (terminalContainer)
-        terminalContainer.style.display = "none";
-    if (welcomeEl)
-        welcomeEl.style.display = "block";
 }
 function initTerminal() {
     if (terminal)
@@ -51,22 +69,30 @@ function initTerminal() {
     }
 }
 function init() {
+    splashEl = document.getElementById("splash");
+    splashStatusEl = document.getElementById("splash-status");
+    splashErrorEl = document.getElementById("splash-error");
+    appEl = document.getElementById("app");
     welcomeEl = document.getElementById("welcome");
     terminalContainer = document.getElementById("terminal-container");
     statusEl = document.getElementById("status");
-    if (!statusEl) {
+    if (!splashEl || !appEl) {
         document.body.textContent = "UI elements missing. Check the console.";
         return;
     }
     const agentConnect = w.agentConnect;
     if (!agentConnect) {
-        setStatus("Preload not available");
+        setSplashStatus("Preload not available");
         return;
     }
+    appEl.style.display = "none";
     agentConnect.onSshConnected(() => {
-        setStatus("Connected");
+        setSplashStatus("Connected");
+        hideSplash();
+        appEl.style.display = "flex";
         initTerminal();
         showTerminal();
+        setStatus("Connected");
     });
     agentConnect.onSshError((msg) => {
         let hint = "";
@@ -74,9 +100,10 @@ function init() {
             hint = " The droplet may still be starting—wait 1–2 minutes and try again.";
         }
         else if (msg.includes("authentication methods failed")) {
-            hint = " Use the connection file you downloaded when you created this droplet, or create a new droplet from the spawn page and use that connection file.";
+            hint = " Use the connection file you downloaded when you created this droplet.";
         }
-        setStatus("Error: " + msg + hint);
+        showSplashError("Error: " + msg + hint);
+        setSplashStatus("Connection failed");
     });
     agentConnect.onSshClose(() => setStatus("Session closed"));
     agentConnect.onSshData((data) => {

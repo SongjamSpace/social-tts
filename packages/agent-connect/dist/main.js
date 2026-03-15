@@ -48,6 +48,9 @@ else {
     let sshStream = null;
     /** Path from macOS open-file (double-click) when app was not running; consumed in whenReady. */
     let pendingOpenFilePath = null;
+    /** Current droplet host/port for Control UI link after onboarding. */
+    let currentBundleHost = null;
+    let currentBundlePort = 18789;
     function createWindow() {
         mainWindow = new electron_1.BrowserWindow({
             width: 900,
@@ -75,7 +78,7 @@ else {
         }
     }
     function isBundlePath(p) {
-        return p.endsWith(".opencaw") || p.endsWith(".json");
+        return p.endsWith(".droplet") || p.endsWith(".opencaw") || p.endsWith(".json");
     }
     function loadBundleFromPathAndConnect(bundlePath) {
         setImmediate(() => {
@@ -88,23 +91,32 @@ else {
             }
         });
     }
-    // macOS: when user double-clicks a .opencaw file, the path is delivered here (not in argv).
-    electron_1.app.on("open-file", (event, pathToOpen) => {
-        event.preventDefault();
-        if (!isBundlePath(pathToOpen))
-            return;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            loadBundleFromPathAndConnect(pathToOpen);
-        }
-        else {
-            pendingOpenFilePath = pathToOpen;
-        }
+    // macOS: register open-file as early as possible (during will-finish-launching) so double-clicking a .droplet file is never missed.
+    electron_1.app.on("will-finish-launching", () => {
+        electron_1.app.on("open-file", (event, pathToOpen) => {
+            event.preventDefault();
+            const path = pathToOpen.startsWith("file://") ? decodeURIComponent(pathToOpen.replace(/^file:\/\//, "")) : pathToOpen;
+            if (!isBundlePath(path))
+                return;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.show();
+                mainWindow.focus();
+                loadBundleFromPathAndConnect(path);
+            }
+            else {
+                pendingOpenFilePath = path;
+            }
+        });
     });
     electron_1.app.whenReady().then(() => {
         createWindow();
         const bundlePath = process.argv.find((a) => isBundlePath(a)) ?? pendingOpenFilePath;
         if (bundlePath) {
             pendingOpenFilePath = null;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.show();
+                mainWindow.focus();
+            }
             loadBundleFromPathAndConnect(bundlePath);
         }
     });
@@ -117,6 +129,8 @@ else {
             sshClient.end();
             sshClient = null;
         }
+        currentBundleHost = bundle.host;
+        currentBundlePort = 18789;
         const { Client: SSH2Client } = require("ssh2");
         const client = new SSH2Client();
         sshClient = client;
@@ -135,7 +149,6 @@ else {
                 if (stream.stderr)
                     stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                 stream.on("close", () => sendToRenderer("ssh-close"));
-                // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
                 stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
             });
         })
@@ -169,7 +182,7 @@ else {
         }
         const result = await electron_1.dialog.showOpenDialog(win ?? undefined, {
             title: "Select connection file",
-            filters: [{ name: "Agent connection", extensions: ["opencaw", "json"] }],
+            filters: [{ name: "Droplet connection", extensions: ["droplet", "opencaw", "json"] }],
             properties: ["openFile"],
         });
         if (result.canceled || result.filePaths.length === 0) {
@@ -201,6 +214,8 @@ else {
                 sshClient = null;
             }
             sshStream = null;
+            currentBundleHost = bundle.host;
+            currentBundlePort = 18789;
             const { Client: SSH2Client } = require("ssh2");
             const client = new SSH2Client();
             sshClient = client;
@@ -221,7 +236,6 @@ else {
                     stream.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                     stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
                     stream.on("close", () => sendToRenderer("ssh-close"));
-                    // Auto-run OpenClaw installer so user lands in onboarding (equivalent to typing command + Enter).
                     stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
                     resolve({ ok: true });
                 });

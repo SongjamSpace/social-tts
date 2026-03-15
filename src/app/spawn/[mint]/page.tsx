@@ -359,7 +359,7 @@ export default function SpawnPage({
           setSpawnMessage("Creating droplet…");
           setPollingPayment(false);
           setSending(false);
-          // One key pair per spawn: generate at spawn time so the key we send and the .opencaw always match.
+          // One key pair per spawn: generate at spawn time so the key we send and the .droplet always match.
           const { publicKeyOpenSSH, privateKeyPem: pem } = await generateSshKeyPair();
           setSshPublicKey(publicKeyOpenSSH);
           setPrivateKeyPem(pem);
@@ -477,9 +477,9 @@ KEY`;
                   Droplet is finishing setup. Wait 1–2 minutes before connecting, or you may see connection or authentication errors.
                 </p>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-2">2. Download the connection file and double-click to open in Agent Connect</p>
+                  <p className="text-sm font-semibold text-white mb-2">2. Download .droplet file and double-click to open in Agent Connect</p>
                   <p className="text-zinc-400 text-sm mb-3">
-                    Download the file below, then double-click it. Agent Connect will open with this connection—no need to use Import inside the app.
+                    Download the .droplet file below, then double-click it. Agent Connect will open with this connection—no need to use Import inside the app.
                   </p>
                   <button
                     type="button"
@@ -497,16 +497,16 @@ KEY`;
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.opencaw`;
+                      a.download = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
                     className="rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium py-2.5 px-4"
                   >
-                    Download connection file
+                    Download .droplet file
                   </button>
                   <p className="text-zinc-500 text-[10px] mt-2">
-                    This file contains your private key. Store it securely. Double-click the file after download to open it in Agent Connect (no need to use Import inside the app).
+                    This file contains your private key. Store it securely. Double-click the .droplet file after download to open it in Agent Connect (no need to use Import inside the app).
                   </p>
                 </div>
                 <div>
@@ -572,7 +572,7 @@ KEY`;
               </>
             ) : (
               <p className="text-zinc-400 text-sm">
-                Your connection file was only available when you spawned. Use “Reset to spawn again” below, then spawn again to get a new connection file.
+                Your .droplet file was only available when you spawned. Use “Reset to spawn again” below, then spawn again to get a new .droplet file.
               </p>
             )}
             <div>
