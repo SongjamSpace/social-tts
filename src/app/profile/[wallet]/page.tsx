@@ -189,30 +189,17 @@ export default function ProfileWalletPage({
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col gap-1 items-end">
-                      {hasDroplet ? (
+                      {bonded && (hasDroplet || launch) && (
                         <Link
                           href={`/spawn/${encodeURIComponent(coin.mint)}`}
-                          className="rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
+                          className={
+                            hasDroplet
+                              ? "rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
+                              : "rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
+                          }
                         >
-                          SSH instructions
+                          {hasDroplet ? "Agent Connect" : "Spawn droplet"}
                         </Link>
-                      ) : bonded && launch ? (
-                        <Link
-                          href={`/spawn/${encodeURIComponent(coin.mint)}`}
-                          className="rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
-                        >
-                          Spawn droplet
-                        </Link>
-                      ) : null}
-                      {bonded && (
-                        <a
-                          href="/agent-connect/releases/latest"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
-                        >
-                          Agent Connect
-                        </a>
                       )}
                       <a
                         href={`https://pump.fun/coin/${coin.mint}`}
