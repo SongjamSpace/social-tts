@@ -41,9 +41,7 @@ function showTerminal() {
         welcomeEl.style.display = "none";
     if (terminalContainer)
         terminalContainer.style.display = "flex";
-    if (terminal && fitAddon) {
-        setTimeout(() => fitAddon.fit(), 50);
-    }
+    setTimeout(() => fitAddon?.fit?.(), 80);
 }
 function initTerminal() {
     if (terminal)
@@ -64,8 +62,24 @@ function initTerminal() {
             w.agentConnect.sendInput(data);
     });
     if (fitAddon) {
-        const resizeObserver = new ResizeObserver(() => fitAddon.fit());
-        resizeObserver.observe(termEl);
+        const ro = new ResizeObserver(() => fitAddon.fit());
+        ro.observe(termEl);
+    }
+}
+function enterTerminal(meta) {
+    hideSplash();
+    if (!appEl)
+        return;
+    appEl.style.display = "flex";
+    initTerminal();
+    if (terminal?.clear)
+        terminal.clear();
+    showTerminal();
+    if (meta.skipInstallerSaved && meta.alreadyInstalled) {
+        setStatus("Installer skipped for this droplet");
+    }
+    else {
+        setStatus(meta.alreadyInstalled ? "Connected (already installed)" : "Connected");
     }
 }
 function init() {
@@ -77,36 +91,29 @@ function init() {
     terminalContainer = document.getElementById("terminal-container");
     statusEl = document.getElementById("status");
     if (!splashEl || !appEl) {
-        document.body.textContent = "UI elements missing. Check the console.";
+        document.body.textContent = "UI elements missing.";
         return;
     }
-    const agentConnect = w.agentConnect;
-    if (!agentConnect) {
+    if (!w.agentConnect) {
         setSplashStatus("Preload not available");
         return;
     }
     appEl.style.display = "none";
-    agentConnect.onSshConnected(() => {
+    w.agentConnect.onSshConnected((meta) => {
         setSplashStatus("Connected");
-        hideSplash();
-        appEl.style.display = "flex";
-        initTerminal();
-        showTerminal();
-        setStatus("Connected");
+        enterTerminal(meta);
     });
-    agentConnect.onSshError((msg) => {
+    w.agentConnect.onSshError((msg) => {
         let hint = "";
-        if (msg.includes("ECONNREFUSED")) {
-            hint = " The droplet may still be starting—wait 1–2 minutes and try again.";
-        }
-        else if (msg.includes("authentication methods failed")) {
-            hint = " Use the connection file you downloaded when you created this droplet.";
-        }
+        if (msg.includes("ECONNREFUSED"))
+            hint = " Wait 1–2 minutes if the droplet just started.";
+        else if (msg.includes("authentication methods failed"))
+            hint = " Use the .droplet from this droplet.";
         showSplashError("Error: " + msg + hint);
         setSplashStatus("Connection failed");
     });
-    agentConnect.onSshClose(() => setStatus("Session closed"));
-    agentConnect.onSshData((data) => {
+    w.agentConnect.onSshClose(() => setStatus("Session closed"));
+    w.agentConnect.onSshData((data) => {
         if (terminal)
             terminal.write(data);
     });

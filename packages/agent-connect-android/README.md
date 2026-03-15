@@ -56,7 +56,7 @@ For distribution you should sign the APK:
    - Open Agent Connect, tap **Import .droplet file**, and select the file.
 
 3. **Connect**  
-   The app connects over SSH and automatically runs the OpenClaw installer. You’ll see the installer output in the terminal.
+   The app connects over SSH. **First time** on a fresh VPS it runs the OpenClaw installer automatically. **Later connects** detect an existing install and skip the installer—you get a normal shell. If OpenClaw is already present, use **Open Control UI** to open the gateway in the browser (`http://<host>:18789`).
 
 4. **Interact**  
    - Type in the input field and press **Enter** (or the keyboard Send action) to send a line (e.g. API key, choices).  

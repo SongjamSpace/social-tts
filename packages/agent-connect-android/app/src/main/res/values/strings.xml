@@ -6,7 +6,12 @@
     <string name="connecting">Connecting…</string>
     <string name="disconnect">Disconnect</string>
     <string name="paste_and_send">Paste and Send</string>
+    <string name="btn_enter">ENTER</string>
     <string name="connect_to">Connect to %1$s?</string>
     <string name="error_invalid_bundle">Invalid connection file</string>
     <string name="error_connection_failed">Connection failed: %1$s</string>
+    <string name="navigate_left">Navigate left</string>
+    <string name="navigate_up">Navigate up</string>
+    <string name="navigate_down">Navigate down</string>
+    <string name="navigate_right">Navigate right</string>
 </resources>
