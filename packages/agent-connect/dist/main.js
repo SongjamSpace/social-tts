@@ -38,6 +38,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+const crypto = __importStar(require("crypto"));
 const bundle_1 = require("./bundle");
 if (process.env.AGENT_CONNECT_MINIMAL === "1") {
     require("./main-minimal.js");
@@ -46,11 +47,48 @@ else {
     let mainWindow = null;
     let sshClient = null;
     let sshStream = null;
-    /** Path from macOS open-file (double-click) when app was not running; consumed in whenReady. */
     let pendingOpenFilePath = null;
-    /** Current droplet host/port for Control UI link after onboarding. */
     let currentBundleHost = null;
     let currentBundlePort = 18789;
+    /** Last bundle used for connect (for skip-installer IPC). */
+    let lastConnectedBundle = null;
+    const OPENCLAW_INSTALL_CMD = "curl -fsSL https://openclaw.ai/install.sh | bash\n";
+    const OPENCLAW_INSTALLED_PROBE = 'bash --login -c \'test -f "$HOME/.openclaw/openclaw.json" || test -x "$HOME/.openclaw/bin/openclaw" || command -v openclaw >/dev/null 2>&1 || test -d "$HOME/.openclaw/workspace" || curl -sf -m 4 http://127.0.0.1:18789/ -o /dev/null || curl -sf -m 4 http://127.0.0.1:18789 -o /dev/null\'';
+    const SKIP_STORE_PATH = () => path.join(electron_1.app.getPath("userData"), "install-skip.json");
+    function bundleKey(bundle) {
+        return crypto
+            .createHash("sha256")
+            .update(`${bundle.host}:${bundle.port}:${bundle.user}:${bundle.mint ?? ""}`)
+            .digest("hex")
+            .slice(0, 32);
+    }
+    function readSkipStore() {
+        try {
+            const raw = fs.readFileSync(SKIP_STORE_PATH(), "utf8");
+            const o = JSON.parse(raw);
+            return typeof o === "object" && o ? o : {};
+        }
+        catch {
+            return {};
+        }
+    }
+    function writeSkipStore(store) {
+        fs.mkdirSync(path.dirname(SKIP_STORE_PATH()), { recursive: true });
+        fs.writeFileSync(SKIP_STORE_PATH(), JSON.stringify(store));
+    }
+    function getSkipInstaller(bundle) {
+        return !!readSkipStore()[bundleKey(bundle)]?.skipInstaller;
+    }
+    function setSkipInstaller(bundle) {
+        const s = readSkipStore();
+        s[bundleKey(bundle)] = { skipInstaller: true, updatedAt: Date.now() };
+        writeSkipStore(s);
+    }
+    function clearSkipInstaller(bundle) {
+        const s = readSkipStore();
+        delete s[bundleKey(bundle)];
+        writeSkipStore(s);
+    }
     function createWindow() {
         mainWindow = new electron_1.BrowserWindow({
             width: 900,
@@ -91,20 +129,19 @@ else {
             }
         });
     }
-    // macOS: register open-file as early as possible (during will-finish-launching) so double-clicking a .droplet file is never missed.
     electron_1.app.on("will-finish-launching", () => {
         electron_1.app.on("open-file", (event, pathToOpen) => {
             event.preventDefault();
-            const path = pathToOpen.startsWith("file://") ? decodeURIComponent(pathToOpen.replace(/^file:\/\//, "")) : pathToOpen;
-            if (!isBundlePath(path))
+            const pathNorm = pathToOpen.startsWith("file://") ? decodeURIComponent(pathToOpen.replace(/^file:\/\//, "")) : pathToOpen;
+            if (!isBundlePath(pathNorm))
                 return;
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.show();
                 mainWindow.focus();
-                loadBundleFromPathAndConnect(path);
+                loadBundleFromPathAndConnect(pathNorm);
             }
             else {
-                pendingOpenFilePath = path;
+                pendingOpenFilePath = pathNorm;
             }
         });
     });
@@ -120,9 +157,103 @@ else {
             loadBundleFromPathAndConnect(bundlePath);
         }
     });
-    /** Normalize PEM string so ssh2 accepts it (trim, fix line endings). */
     function normalizePrivateKey(pem) {
         return pem.replace(/\r\n/g, "\n").trim();
+    }
+    /** Remote probe; true = OpenClaw signals present. Prefer ssh2 `exit`; fallback to `close` (code) if exit never fires. */
+    function probeOpenClawInstalled(client) {
+        return new Promise((resolve) => {
+            let settled = false;
+            const done = (installed) => {
+                if (settled)
+                    return;
+                settled = true;
+                resolve(installed);
+            };
+            const t = setTimeout(() => done(false), 25000);
+            client.exec(OPENCLAW_INSTALLED_PROBE, (err, stream) => {
+                if (err || !stream) {
+                    clearTimeout(t);
+                    done(false);
+                    return;
+                }
+                stream.on("data", () => { });
+                if (stream.stderr)
+                    stream.stderr.on("data", () => { });
+                stream.once("exit", (code, signal) => {
+                    clearTimeout(t);
+                    if (signal != null && signal !== "")
+                        done(false);
+                    else
+                        done(code === 0);
+                });
+                stream.once("close", (code) => {
+                    if (!settled) {
+                        clearTimeout(t);
+                        done(code === 0);
+                    }
+                });
+            });
+        });
+    }
+    function attachInteractiveShell(client, runInstaller, meta, onShellError, onShellReady) {
+        client.shell((err, stream) => {
+            if (err) {
+                onShellError(err.message);
+                return;
+            }
+            if (!stream) {
+                onShellError("No shell");
+                return;
+            }
+            sshStream = stream;
+            stream.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
+            if (stream.stderr)
+                stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
+            stream.on("close", () => sendToRenderer("ssh-close"));
+            sendToRenderer("ssh-connected", meta);
+            if (runInstaller) {
+                stream.write(OPENCLAW_INSTALL_CMD);
+            }
+            else {
+                setTimeout(() => {
+                    try {
+                        stream.write("openclaw\n");
+                    }
+                    catch {
+                        /* ignore */
+                    }
+                }, 600);
+            }
+            onShellReady?.();
+        });
+    }
+    async function decideInstallerAndConnect(client, bundle, controlUiUrl, onShellError, onShellReady) {
+        lastConnectedBundle = bundle;
+        const localSkip = getSkipInstaller(bundle);
+        let runInstaller;
+        let alreadyInstalled;
+        let skipInstallerSaved = localSkip;
+        if (localSkip) {
+            runInstaller = false;
+            alreadyInstalled = true;
+        }
+        else {
+            const probeOk = await probeOpenClawInstalled(client);
+            if (probeOk) {
+                setSkipInstaller(bundle);
+                skipInstallerSaved = true;
+                runInstaller = false;
+                alreadyInstalled = true;
+            }
+            else {
+                runInstaller = true;
+                alreadyInstalled = false;
+                setSkipInstaller(bundle);
+                skipInstallerSaved = true;
+            }
+        }
+        attachInteractiveShell(client, runInstaller, { alreadyInstalled, controlUiUrl, skipInstallerSaved }, onShellError, onShellReady);
     }
     function connectWithBundle(bundle) {
         if (sshClient) {
@@ -134,23 +265,10 @@ else {
         const { Client: SSH2Client } = require("ssh2");
         const client = new SSH2Client();
         sshClient = client;
+        const controlUiUrl = `http://${bundle.host}:18789`;
         client
             .on("ready", () => {
-            sendToRenderer("ssh-connected");
-            client.shell((err, stream) => {
-                if (err) {
-                    sendToRenderer("ssh-error", err.message);
-                    return;
-                }
-                if (!stream)
-                    return;
-                sshStream = stream;
-                stream.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
-                if (stream.stderr)
-                    stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
-                stream.on("close", () => sendToRenderer("ssh-close"));
-                stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
-            });
+            void decideInstallerAndConnect(client, bundle, controlUiUrl, (msg) => sendToRenderer("ssh-error", msg));
         })
             .on("error", (err) => {
             sendToRenderer("ssh-error", err.message);
@@ -206,8 +324,39 @@ else {
             return { error: e instanceof Error ? e.message : "Invalid bundle" };
         }
     });
+    electron_1.ipcMain.handle("open-external-url", async (_, url) => {
+        await electron_1.shell.openExternal(url);
+    });
+    /** Remember this droplet: never auto-run install.sh on reconnect. */
+    electron_1.ipcMain.handle("skip-installer-this-droplet", async () => {
+        if (!lastConnectedBundle)
+            return { error: "Not connected" };
+        setSkipInstaller(lastConnectedBundle);
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("clear-skip-installer-this-droplet", async () => {
+        if (!lastConnectedBundle)
+            return { error: "No droplet" };
+        clearSkipInstaller(lastConnectedBundle);
+        return { ok: true };
+    });
+    /** Clear saved skip and reconnect with installer (same bundle). */
+    electron_1.ipcMain.handle("reconnect-run-installer", async () => {
+        const bundle = lastConnectedBundle;
+        if (!bundle)
+            return { error: "No droplet to reconnect" };
+        clearSkipInstaller(bundle);
+        if (sshClient) {
+            sshClient.end();
+            sshClient = null;
+        }
+        sshStream = null;
+        connectWithBundle(bundle);
+        return { ok: true };
+    });
     electron_1.ipcMain.handle("connect", async (_event, bundle) => {
         const normalized = normalizePrivateKey(bundle.privateKeyPem);
+        const controlUiUrl = `http://${bundle.host}:18789`;
         return new Promise((resolve) => {
             if (sshClient) {
                 sshClient.end();
@@ -221,24 +370,10 @@ else {
             sshClient = client;
             client
                 .on("ready", () => {
-                sendToRenderer("ssh-connected");
-                client.shell((err, stream) => {
-                    if (err) {
-                        sendToRenderer("ssh-error", err.message);
-                        resolve({ error: err.message });
-                        return;
-                    }
-                    if (!stream) {
-                        resolve({ error: "No shell" });
-                        return;
-                    }
-                    sshStream = stream;
-                    stream.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
-                    stream.stderr.on("data", (data) => sendToRenderer("ssh-data", data.toString("utf8")));
-                    stream.on("close", () => sendToRenderer("ssh-close"));
-                    stream.write("curl -fsSL https://openclaw.ai/install.sh | bash\n");
-                    resolve({ ok: true });
-                });
+                void decideInstallerAndConnect(client, bundle, controlUiUrl, (msg) => {
+                    sendToRenderer("ssh-error", msg);
+                    resolve({ error: msg });
+                }, () => resolve({ ok: true }));
             })
                 .on("error", (err) => {
                 sendToRenderer("ssh-error", err.message);

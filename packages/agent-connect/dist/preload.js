@@ -6,13 +6,19 @@ electron_1.contextBridge.exposeInMainWorld("agentConnect", {
     openBundle: () => electron_1.ipcRenderer.invoke("open-bundle"),
     parseBundle: (json) => electron_1.ipcRenderer.invoke("parse-bundle", json),
     connect: (bundle) => electron_1.ipcRenderer.invoke("connect", bundle),
+    openExternalUrl: (url) => electron_1.ipcRenderer.invoke("open-external-url", url),
+    skipInstallerThisDroplet: () => electron_1.ipcRenderer.invoke("skip-installer-this-droplet"),
+    clearSkipInstallerThisDroplet: () => electron_1.ipcRenderer.invoke("clear-skip-installer-this-droplet"),
+    reconnectRunInstaller: () => electron_1.ipcRenderer.invoke("reconnect-run-installer"),
     onSshData: (fn) => {
         const sub = (_, data) => fn(data);
         electron_1.ipcRenderer.on("ssh-data", sub);
         return () => electron_1.ipcRenderer.removeListener("ssh-data", sub);
     },
     onSshConnected: (fn) => {
-        electron_1.ipcRenderer.on("ssh-connected", () => fn());
+        const sub = (_, meta) => fn(meta);
+        electron_1.ipcRenderer.on("ssh-connected", sub);
+        return () => electron_1.ipcRenderer.removeListener("ssh-connected", sub);
     },
     onSshError: (fn) => {
         electron_1.ipcRenderer.on("ssh-error", (_, msg) => fn(msg));

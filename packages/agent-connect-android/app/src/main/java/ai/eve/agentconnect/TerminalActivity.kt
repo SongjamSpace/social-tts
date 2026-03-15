@@ -4,11 +4,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+
 class TerminalActivity : AppCompatActivity() {
 
     companion object {
@@ -19,6 +22,8 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var outputView: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var inputField: EditText
+    private var statusBar: TextView? = null
+    private val outputFilter = TuiOutputFilter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +39,7 @@ class TerminalActivity : AppCompatActivity() {
         outputView = findViewById(R.id.terminal_output)
         scrollView = findViewById(R.id.scroll_output)
         inputField = findViewById(R.id.terminal_input)
+        statusBar = findViewById(R.id.status_bar)
 
         val bundle = try {
             ConnectionBundle.parse(bundleJson)
@@ -48,13 +54,26 @@ class TerminalActivity : AppCompatActivity() {
         session = SshSession(
             bundle = bundle,
             onOutput = { text ->
-                runOnUiThread {
-                    if (outputView.text == getString(R.string.connecting)) {
-                        outputView.text = ""
+                outputFilter.process(
+                    chunk = text,
+                    onContent = { segment ->
+                        runOnUiThread {
+                            if (outputView.text == getString(R.string.connecting)) {
+                                outputView.text = ""
+                            }
+                            outputView.append(segment)
+                            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+                        }
+                    },
+                    onStatus = { line ->
+                        runOnUiThread {
+                            statusBar?.let { bar ->
+                                bar.text = line
+                                bar.visibility = View.VISIBLE
+                            }
+                        }
                     }
-                    outputView.append(text)
-                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
-                }
+                )
             },
             onError = { msg ->
                 runOnUiThread {
@@ -92,11 +111,24 @@ class TerminalActivity : AppCompatActivity() {
             } else false
         }
 
-        findViewById<android.widget.Button>(R.id.btn_paste_send).setOnClickListener {
-            pasteAndSend()
+        findViewById<Button>(R.id.btn_paste_send).setOnClickListener {
+            sendInput()
         }
 
-        findViewById<android.widget.Button>(R.id.btn_disconnect).setOnClickListener {
+        findViewById<Button>(R.id.btn_arrow_left).setOnClickListener {
+            session?.sendRaw("\u001b[D")
+        }
+        findViewById<Button>(R.id.btn_arrow_up).setOnClickListener {
+            session?.sendRaw("\u001b[A")
+        }
+        findViewById<Button>(R.id.btn_arrow_down).setOnClickListener {
+            session?.sendRaw("\u001b[B")
+        }
+        findViewById<Button>(R.id.btn_arrow_right).setOnClickListener {
+            session?.sendRaw("\u001b[C")
+        }
+
+        findViewById<Button>(R.id.btn_disconnect).setOnClickListener {
             session?.close()
             session = null
             finish()

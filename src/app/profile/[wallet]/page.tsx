@@ -86,13 +86,16 @@ export default function ProfileWalletPage({
           usd_market_cap: coin.usd_market_cap,
         }));
 
-  // Testing: pretend this mint is bonded and has $100k market cap so hatch UI is visible
-  const TEST_MINT_BONDED_OVERRIDE = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
-  const displayTokens = agentTokens.map((item) =>
-    item.mint === TEST_MINT_BONDED_OVERRIDE
-      ? { ...item, complete: true, usd_market_cap: 100_000 }
-      : item
-  );
+  // Testing: pretend these mints are bonded with overridden market cap so hatch/Agent Connect UI is visible
+  const TEST_MINT_BONDED_OVERRIDES: Record<string, number> = {
+    "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve": 100_000,
+    "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
+  };
+  const displayTokens = agentTokens.map((item) => {
+    const overrideCap = TEST_MINT_BONDED_OVERRIDES[item.mint];
+    if (overrideCap != null) return { ...item, complete: true, usd_market_cap: overrideCap };
+    return item;
+  });
 
   function formatMarketCap(mcap: number | undefined): string {
     if (mcap == null || !Number.isFinite(mcap)) return "—";
@@ -185,22 +188,19 @@ export default function ProfileWalletPage({
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0 flex flex-col gap-1">
-                      {hasDroplet ? (
+                    <div className="shrink-0 flex flex-col gap-1 items-end">
+                      {bonded && (hasDroplet || launch) && (
                         <Link
                           href={`/spawn/${encodeURIComponent(coin.mint)}`}
-                          className="rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
+                          className={
+                            hasDroplet
+                              ? "rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
+                              : "rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
+                          }
                         >
-                          SSH instructions
+                          {hasDroplet ? "Agent Connect" : "Spawn droplet"}
                         </Link>
-                      ) : bonded && launch ? (
-                        <Link
-                          href={`/spawn/${encodeURIComponent(coin.mint)}`}
-                          className="rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
-                        >
-                          Spawn droplet
-                        </Link>
-                      ) : null}
+                      )}
                       <a
                         href={`https://pump.fun/coin/${coin.mint}`}
                         target="_blank"

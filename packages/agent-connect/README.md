@@ -1,6 +1,14 @@
 # Agent Connect
 
-Desktop app to connect to your agent droplet via SSH. Import a `.opencaw` connection file (downloaded from the spawn success page) and connect with one click.
+Desktop app to connect to your agent droplet via SSH. Import a `.droplet` connection file (from the spawn success page) and connect with one click.
+
+**Reconnect / skip installer**
+
+- **First open:** The first time you open a given `.droplet`, the app runs the OpenClaw installer (`curl … install.sh`). It **automatically** saves “skip installer for this droplet” so you do **not** need to click anything.
+- **Every later open:** Reopening the same `.droplet` skips the installer: you get a shell and an automatic `openclaw` line. No button required.
+- **Run installer again:** Use the toolbar/banner **Run installer again** to clear the saved preference and reconnect with the full installer (e.g. after wiping the VM).
+- Each new SSH session is a new terminal; scrollback is not restored. For continuity use **Open Control UI** (browser) or **tmux** on the server.
+- Skip state is stored in `install-skip.json` under the app’s userData (macOS app support).
 
 ## Development
 
@@ -12,9 +20,13 @@ npm start
 
 ## Build for distribution (Mac)
 
+**Rebuild and reinstall:** After pulling changes (e.g. skip-installer logic or UI), run a full build and reinstall the app so the bundled UI and logic are up to date:
+
 ```bash
-npm run dist:mac
+cd packages/agent-connect && npm run build && npm run dist:mac
 ```
+
+Then install the new .app from `release/` (e.g. drag `Agent Connect.app` to Applications from the DMG). Old builds do not include the latest behavior.
 
 Output: `release/Agent Connect-0.1.0-arm64.dmg` (and .zip). Host the .dmg on your site or CDN and link from the spawn success page (e.g. `/agent-connect/releases/latest`).
 
@@ -30,9 +42,9 @@ The app is not code-signed. After downloading, macOS may show **"Agent Connect.a
 
 ## Usage
 
-1. On the spawn success page, click **Download connection file** to get a `.opencaw` file.
-2. Open Agent Connect and click **Import connection file**, or run from the terminal: `open "Agent Connect.app" /path/to/file.opencaw`
-3. Click **Connect** (or the app connects automatically if opened with a file).
+1. On the spawn success page, download the **`.droplet`** connection file.
+2. Double-click the `.droplet` (or import from the app). The **first** time you open it, the app runs the OpenClaw installer and saves “skip next time” for that droplet.
+3. Every **later** open of the same `.droplet` skips the installer and goes straight to a shell. Use **Run installer again** in the app only if you wiped the VM or need a fresh install.
 
 ## Testing
 

@@ -6,7 +6,6 @@ const FitAddon = w.FitAddon;
 
 let terminal: any = null;
 let fitAddon: any = null;
-
 let splashEl: HTMLDivElement | null = null;
 let splashStatusEl: HTMLParagraphElement | null = null;
 let splashErrorEl: HTMLParagraphElement | null = null;
@@ -44,9 +43,7 @@ function setStatus(msg: string): void {
 function showTerminal(): void {
   if (welcomeEl) welcomeEl.style.display = "none";
   if (terminalContainer) terminalContainer.style.display = "flex";
-  if (terminal && fitAddon) {
-    setTimeout(() => fitAddon.fit(), 50);
-  }
+  setTimeout(() => fitAddon?.fit?.(), 80);
 }
 
 function initTerminal(): void {
@@ -64,8 +61,22 @@ function initTerminal(): void {
     if (w.agentConnect) w.agentConnect.sendInput(data);
   });
   if (fitAddon) {
-    const resizeObserver = new ResizeObserver(() => fitAddon.fit());
-    resizeObserver.observe(termEl);
+    const ro = new ResizeObserver(() => fitAddon.fit());
+    ro.observe(termEl);
+  }
+}
+
+function enterTerminal(meta: { alreadyInstalled?: boolean; skipInstallerSaved?: boolean }): void {
+  hideSplash();
+  if (!appEl) return;
+  appEl.style.display = "flex";
+  initTerminal();
+  if (terminal?.clear) terminal.clear();
+  showTerminal();
+  if (meta.skipInstallerSaved && meta.alreadyInstalled) {
+    setStatus("Installer skipped for this droplet");
+  } else {
+    setStatus(meta.alreadyInstalled ? "Connected (already installed)" : "Connected");
   }
 }
 
@@ -79,38 +90,29 @@ function init(): void {
   statusEl = document.getElementById("status") as HTMLSpanElement | null;
 
   if (!splashEl || !appEl) {
-    document.body.textContent = "UI elements missing. Check the console.";
+    document.body.textContent = "UI elements missing.";
     return;
   }
-
-  const agentConnect = w.agentConnect;
-  if (!agentConnect) {
+  if (!w.agentConnect) {
     setSplashStatus("Preload not available");
     return;
   }
 
   appEl.style.display = "none";
 
-  agentConnect.onSshConnected(() => {
+  w.agentConnect.onSshConnected((meta: { alreadyInstalled?: boolean; skipInstallerSaved?: boolean }) => {
     setSplashStatus("Connected");
-    hideSplash();
-    appEl!.style.display = "flex";
-    initTerminal();
-    showTerminal();
-    setStatus("Connected");
+    enterTerminal(meta);
   });
-  agentConnect.onSshError((msg: string) => {
+  w.agentConnect.onSshError((msg: string) => {
     let hint = "";
-    if (msg.includes("ECONNREFUSED")) {
-      hint = " The droplet may still be starting—wait 1–2 minutes and try again.";
-    } else if (msg.includes("authentication methods failed")) {
-      hint = " Use the connection file you downloaded when you created this droplet.";
-    }
+    if (msg.includes("ECONNREFUSED")) hint = " Wait 1–2 minutes if the droplet just started.";
+    else if (msg.includes("authentication methods failed")) hint = " Use the .droplet from this droplet.";
     showSplashError("Error: " + msg + hint);
     setSplashStatus("Connection failed");
   });
-  agentConnect.onSshClose(() => setStatus("Session closed"));
-  agentConnect.onSshData((data: string) => {
+  w.agentConnect.onSshClose(() => setStatus("Session closed"));
+  w.agentConnect.onSshData((data: string) => {
     if (terminal) terminal.write(data);
   });
 }

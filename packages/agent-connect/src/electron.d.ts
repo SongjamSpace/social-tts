@@ -1,6 +1,7 @@
 declare module "electron" {
   export const app: any;
   export const dialog: any;
+  export const shell: { openExternal(url: string): Promise<void> };
   export const ipcMain: {
     handle(channel: string, listener: (event: unknown, ...args: any[]) => any): void;
     on(channel: string, listener: (event: unknown, ...args: any[]) => void): void;
