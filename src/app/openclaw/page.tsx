@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LLM_PROVIDERS } from "@/lib/llmProviders";
 import OpenClawChat from "@/components/OpenClawChat";
-import OpenClawLaunch from "@/components/OpenClawLaunch";
 import type { OpenClawCollectedPayload, ChatMessage } from "./types";
 
 export type { OpenClawCollectedPayload, ChatMessage };
@@ -16,6 +15,11 @@ export default function OpenClawPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [collectedPayload, setCollectedPayload] = useState<OpenClawCollectedPayload | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [launchSuccess, setLaunchSuccess] = useState<{ mint: string; agentUrl?: string } | null>(
+    null
+  );
+
+  const pumpUrl = launchSuccess ? `https://pump.fun/coin/${launchSuccess.mint}` : null;
 
   const handleStart = () => {
     const key = apiKey.trim();
@@ -29,7 +33,7 @@ export default function OpenClawPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center bg-[#060608] text-white px-4 py-8">
+    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center bg-[#060608] text-white px-4 py-8 relative z-[1000]">
       <div className="w-full max-w-2xl relative">
         <div className="text-center mb-10">
           <h1
@@ -43,8 +47,49 @@ export default function OpenClawPage() {
           </p>
         </div>
 
-        {step === 1 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-6">
+        {launchSuccess ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+            <h2 className="text-xl font-bold text-white">You&apos;re live</h2>
+            <p className="text-zinc-400 text-sm">
+              Your token is on Pump.fun and your agent is deploying.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={pumpUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-red-500/20 text-red-400 px-4 py-2 text-sm font-semibold hover:bg-red-500/30"
+              >
+                View token on pump.fun
+              </a>
+              {launchSuccess.agentUrl && (
+                <a
+                  href={launchSuccess.agentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 text-white px-4 py-2 text-sm font-semibold hover:bg-white/15"
+                >
+                  Open your agent
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => router.push("/profile")}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/10 text-white px-4 py-2 text-sm font-semibold hover:bg-white/15"
+              >
+                Go to profile
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLaunchSuccess(null)}
+              className="block text-zinc-500 hover:text-zinc-300 text-sm"
+            >
+              Launch another
+            </button>
+          </div>
+        ) : step === 1 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-6 relative z-[1001] isolate">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
                 API key
@@ -112,7 +157,7 @@ export default function OpenClawPage() {
             imageFile={imageFile}
             setImageFile={setImageFile}
             onBack={() => setStep(1)}
-            onLaunchSuccess={() => router.push("/profile")}
+            onLaunchSuccess={(mint: string, agentUrl?: string) => setLaunchSuccess({ mint, agentUrl })}
           />
         )}
       </div>
