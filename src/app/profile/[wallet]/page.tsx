@@ -60,12 +60,30 @@ export default function ProfileWalletPage({
     };
   }, [params]);
 
-  const launchByMint = new Map(launches.map((l) => [l.mint, l]));
+  // On localhost, inject test mint so it shows even when not in launches/coins (prod has it in Firestore)
+  const isLocalhost =
+    typeof window !== "undefined" && window.location.hostname === "localhost";
+  const DEV_TEST_MINT = "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve";
+  const devLaunch: LaunchRecord | null =
+    isLocalhost && !launches.some((l) => l.mint === DEV_TEST_MINT)
+      ? {
+          mint: DEV_TEST_MINT,
+          creator: wallet ?? "",
+          seedPayload: { name: "Test Agent (dev)", ticker: "TEST" },
+          createdAt: null,
+          agentUrl: null,
+          hatchStatus: null,
+          dropletIp: null,
+        }
+      : null;
+  const effectiveLaunches = devLaunch ? [...launches, devLaunch] : launches;
+
+  const launchByMint = new Map(effectiveLaunches.map((l) => [l.mint, l]));
   const coinByMint = new Map(coins.map((c) => [c.mint, c]));
   // Prefer launches (Firestore) so OpenClaw agents show; fallback to all creator coins if no launch records yet
   const agentTokens =
-    launches.length > 0
-      ? launches.map((launch) => {
+    effectiveLaunches.length > 0
+      ? effectiveLaunches.map((launch) => {
           const coin = coinByMint.get(launch.mint);
           const payload = launch.seedPayload || {};
           return {
