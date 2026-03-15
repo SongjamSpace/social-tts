@@ -24,6 +24,7 @@ const BIP_OPTIONS = [
   { id: "002", label: "#002", href: "/voices", external: false },
   { id: "003", label: "#003", href: "/", external: false },
   { id: "004", label: "#004", href: "/openclaw", external: false },
+  { id: "005", label: "Profile", href: "/profile", external: false },
 ];
 
 export default function Navbar() {
@@ -42,7 +43,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#060608]/80 backdrop-blur-xl">
+    <nav className="sticky top-0 z-[1100] border-b border-white/5 bg-[#060608]/80 backdrop-blur-xl">
       <div className="px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group text-white">
           <EveLogoIcon className="w-7 h-7 shrink-0" />
@@ -57,12 +58,12 @@ export default function Navbar() {
               type="button"
               onClick={() => setBipOpen((o) => !o)}
               className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                pathname === "/voices" || pathname === "/" || pathname === "/openclaw"
+                pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname?.startsWith("/profile")
                   ? "text-white"
                   : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {(pathname === "/voices" || pathname === "/" || pathname === "/openclaw") && (
+              {(pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname?.startsWith("/profile")) && (
                 <motion.div
                   layoutId="nav-pill"
                   className="absolute inset-0 rounded-lg bg-white/[0.06] border border-white/10"
@@ -73,7 +74,7 @@ export default function Navbar() {
               <span className="relative z-10 ml-1 opacity-70">▾</span>
             </button>
             {bipOpen && (
-              <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-[#111113] border border-white/10 shadow-xl z-50">
+              <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-[#111113] border border-white/10 shadow-xl z-[1100]">
                 {BIP_OPTIONS.map((opt) =>
                   opt.external ? (
                     <a

@@ -63,6 +63,19 @@ export interface OpenClawLaunchProps {
   twitterUrl: string;
   telegramUrl: string;
   description?: string;
+  /** Full seed payload for launch record (enables profile + hatch memories). */
+  seedPayload?: {
+    name?: string;
+    ticker?: string;
+    description?: string;
+    twitter?: string;
+    website?: string;
+    telegram?: string;
+    tone?: string;
+    extra?: Record<string, unknown>;
+    imageUrl?: string;
+    imagePrompt?: string;
+  } | null;
   onSuccess: (mint: string, agentUrl?: string) => void;
 }
 
@@ -76,6 +89,7 @@ export default function OpenClawLaunch({
   twitterUrl,
   telegramUrl,
   description = "OpenClaw agent token",
+  seedPayload = null,
   onSuccess,
 }: OpenClawLaunchProps) {
   const { wallets } = useWallets();
@@ -190,6 +204,29 @@ export default function OpenClawLaunch({
       }
 
       const mintB58 = mint.publicKey.toBase58();
+      const creatorAddress = solanaWallet.address;
+
+      try {
+        await fetch("/api/openclaw/launch-record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mint: mintB58,
+            creator: creatorAddress,
+            seedPayload: seedPayload ?? {
+              name: trimmedName,
+              ticker: trimmedSymbol,
+              description: description?.trim() ?? "",
+              twitter: twitterUrl.trim() || undefined,
+              website: websiteUrl.trim() || undefined,
+              telegram: telegramUrl.trim() || undefined,
+              imageUrl: imageUrl ?? undefined,
+            },
+          }),
+        });
+      } catch (e) {
+        console.warn("Launch record error (token is live):", e);
+      }
 
       setStatusMsg("Deploying agent...");
       let agentUrl: string | undefined;

@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-agent",
+  "version": "1.0.0",
+  "description": "OpenClaw hatched agent server - chat UI and LLM streaming",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "openai": "^4.73.0"
+  }
+}

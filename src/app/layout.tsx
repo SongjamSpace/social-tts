@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Eve – Pump.fun Analytics",
+  title: "Eve – Tokenized Agentic Framework",
   description:
     "Full-stack analytics for mindshare on pump.fun. Track top token deployers, volume, market cap, creator fees, and more.",
   manifest: "/manifest.json",

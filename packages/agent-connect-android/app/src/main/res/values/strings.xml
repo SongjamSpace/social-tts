@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agent Connect</string>
+    <string name="open_droplet">Open .droplet file</string>
+    <string name="import_droplet">Import .droplet file</string>
+    <string name="connecting">Connecting…</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="paste_and_send">Paste and Send</string>
+    <string name="connect_to">Connect to %1$s?</string>
+    <string name="error_invalid_bundle">Invalid connection file</string>
+    <string name="error_connection_failed">Connection failed: %1$s</string>
+</resources>

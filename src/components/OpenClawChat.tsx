@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import type { OpenClawCollectedPayload, ChatMessage } from "@/app/openclaw/types";
 import { usePrivyAvailable } from "@/components/providers";
-import OpenClawConnectAndLaunch from "@/components/OpenClawConnectAndLaunch";
+import AgentConnectAndLaunch from "@/components/AgentConnectAndLaunch";
 
 const DEFAULT_LOGO_PROMPT = "Professional token logo, minimal, clean design, square, suitable for cryptocurrency token";
 
@@ -342,7 +342,7 @@ export default function OpenClawChat({
               onImageUrl={(url) => setCollectedPayload((prev) => prev ? { ...prev, imageUrl: url } : null)}
             />
             {privyAvailable ? (
-              <OpenClawConnectAndLaunch
+              <AgentConnectAndLaunch
                 apiKey={apiKey}
                 tokenName={collectedPayload.name}
                 symbol={collectedPayload.ticker}
@@ -352,6 +352,7 @@ export default function OpenClawChat({
                 twitterUrl={collectedPayload.twitter ?? ""}
                 telegramUrl={collectedPayload.telegram ?? ""}
                 description={collectedPayload.description}
+                seedPayload={collectedPayload}
                 onSuccess={onLaunchSuccess}
               />
             ) : (

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
+
+    <application
+        android:name=".AgentConnectApp"
+        android:allowBackup="true"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:label="@string/app_name"
+        android:roundIcon="@android:drawable/ic_menu_preferences"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AgentConnect"
+        tools:targetApi="34">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AgentConnect">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" android:pathPattern=".*\\.droplet" android:mimeType="*/*" />
+                <data android:scheme="content" android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".TerminalActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AgentConnect"
+            android:windowSoftInputMode="adjustResize" />
+    </application>
+</manifest>

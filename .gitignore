@@ -12,6 +12,12 @@ node_modules
 build/
 tsconfig.tsbuildinfo
 
+# Electron / Agent Connect release output (exceeds GitHub file size limit)
+packages/agent-connect/release/
+
+# OpenClaw Connect release binaries (DMG, zip exceed GitHub limit)
+public/openclaw-connect/releases/
+
 # PWA / TWA / Android
 *.keystore
 manifest-checksum.txt

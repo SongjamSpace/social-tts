@@ -1,20 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { LLM_PROVIDERS } from "@/lib/llmProviders";
 import OpenClawChat from "@/components/OpenClawChat";
-import OpenClawLaunch from "@/components/OpenClawLaunch";
 import type { OpenClawCollectedPayload, ChatMessage } from "./types";
 
 export type { OpenClawCollectedPayload, ChatMessage };
 
 export default function OpenClawPage() {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [apiKey, setApiKey] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [collectedPayload, setCollectedPayload] = useState<OpenClawCollectedPayload | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [launchSuccess, setLaunchSuccess] = useState<{ mint: string; agentUrl?: string } | null>(null);
+  const [launchSuccess, setLaunchSuccess] = useState<{ mint: string; agentUrl?: string } | null>(
+    null
+  );
 
   const pumpUrl = launchSuccess ? `https://pump.fun/coin/${launchSuccess.mint}` : null;
 
@@ -69,11 +72,18 @@ export default function OpenClawPage() {
                   Open your agent
                 </a>
               )}
+              <button
+                type="button"
+                onClick={() => router.push("/profile")}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/10 text-white px-4 py-2 text-sm font-semibold hover:bg-white/15"
+              >
+                Go to profile
+              </button>
             </div>
             <button
               type="button"
               onClick={() => setLaunchSuccess(null)}
-              className="text-zinc-500 hover:text-zinc-300 text-sm"
+              className="block text-zinc-500 hover:text-zinc-300 text-sm"
             >
               Launch another
             </button>
