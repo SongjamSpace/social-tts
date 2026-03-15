@@ -60,12 +60,30 @@ export default function ProfileWalletPage({
     };
   }, [params]);
 
-  const launchByMint = new Map(launches.map((l) => [l.mint, l]));
+  // On localhost, inject test mint so it shows even when not in launches/coins (prod has it in Firestore)
+  const isLocalhost =
+    typeof window !== "undefined" && window.location.hostname === "localhost";
+  const DEV_TEST_MINT = "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve";
+  const devLaunch: LaunchRecord | null =
+    isLocalhost && !launches.some((l) => l.mint === DEV_TEST_MINT)
+      ? {
+          mint: DEV_TEST_MINT,
+          creator: wallet ?? "",
+          seedPayload: { name: "Test Agent (dev)", ticker: "TEST" },
+          createdAt: null,
+          agentUrl: null,
+          hatchStatus: null,
+          dropletIp: null,
+        }
+      : null;
+  const effectiveLaunches = devLaunch ? [...launches, devLaunch] : launches;
+
+  const launchByMint = new Map(effectiveLaunches.map((l) => [l.mint, l]));
   const coinByMint = new Map(coins.map((c) => [c.mint, c]));
   // Prefer launches (Firestore) so OpenClaw agents show; fallback to all creator coins if no launch records yet
   const agentTokens =
-    launches.length > 0
-      ? launches.map((launch) => {
+    effectiveLaunches.length > 0
+      ? effectiveLaunches.map((launch) => {
           const coin = coinByMint.get(launch.mint);
           const payload = launch.seedPayload || {};
           return {
@@ -91,6 +109,8 @@ export default function ProfileWalletPage({
     "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve": 100_000,
     "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
   };
+  // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
+  const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
   const displayTokens = agentTokens.map((item) => {
     const overrideCap = TEST_MINT_BONDED_OVERRIDES[item.mint];
     if (overrideCap != null) return { ...item, complete: true, usd_market_cap: overrideCap };
@@ -189,16 +209,19 @@ export default function ProfileWalletPage({
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col gap-1 items-end">
-                      {bonded && (hasDroplet || launch) && (
+                      {((bonded && (hasDroplet || launch)) ||
+                        TEST_MINT_BONDED_OVERRIDES[coin.mint] != null) && (
                         <Link
                           href={`/spawn/${encodeURIComponent(coin.mint)}`}
                           className={
-                            hasDroplet
+                            hasDroplet || coin.mint === TEST_MINT_AGENT_CONNECT
                               ? "rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-2 text-center"
                               : "rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-2 text-center"
                           }
                         >
-                          {hasDroplet ? "Agent Connect" : "Spawn droplet"}
+                          {hasDroplet || coin.mint === TEST_MINT_AGENT_CONNECT
+                            ? "Agent Connect"
+                            : "Spawn droplet"}
                         </Link>
                       )}
                       <a
