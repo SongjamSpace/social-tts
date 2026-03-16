@@ -36,7 +36,7 @@ export default function AndroidDownloadPage() {
         <div className="flex flex-col gap-3">
           <a
             href={dropletFileUrl}
-            target="_blank"
+            download="openclaw-droplet.droplet"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-5 text-sm"
           >

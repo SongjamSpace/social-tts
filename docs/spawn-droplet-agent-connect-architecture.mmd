@@ -1,0 +1,62 @@
+flowchart TB
+  subgraph UserLayer["USER"]
+    direction TB
+    Profile["Profile (bonded token)"]
+    SpawnCTA["Spawn Droplet"]
+    SpawnPage["/spawn/[mint]"]
+    ChooseSize["Choose 2GB (0.5 SOL) or 4GB (1 SOL)"]
+    Treasury["Treasury wallet (SOL + memo)"]
+    PollSpawn["Poll spawn-status"]
+    Success["Success: Droplet IP, SSH instructions, setup guide"]
+    DownloadApps["Download Agent Connect (Mac .dmg or Android APK)"]
+    DownloadDroplet["Download .droplet file"]
+    OpenAgentConnect["Open .droplet in Agent Connect"]
+    AgentConnectMac["Agent Connect (Mac)"]
+    AgentConnectAndroid["Agent Connect (Android)"]
+    Profile --> SpawnCTA --> SpawnPage --> ChooseSize --> Treasury
+    Treasury --> PollSpawn
+    PollSpawn <-->|"spawn-status query / response"| SpawnStatusAPI
+    PollSpawn --> Success
+    Success --> DownloadApps
+    Success --> DownloadDroplet
+    DownloadApps --> OpenAgentConnect
+    DownloadDroplet --> OpenAgentConnect
+    OpenAgentConnect --> AgentConnectMac
+    OpenAgentConnect --> AgentConnectAndroid
+    AgentConnectMac -->|SSH| Droplet
+    AgentConnectAndroid -->|SSH| Droplet
+    DownloadDroplet -.->|"GET .droplet (e.g. android-download page)"| DropletFileAPI
+  end
+
+  subgraph BackendLayer["EVE.ARMY BACKEND"]
+    LaunchAPI["launch-record API"]
+    CreatorAPI["creator-tokens API"]
+    LaunchesAPI["launches API"]
+    Firestore["Firestore (openclaw_launches, spawn_intents, openclaw_droplet_tokens)"]
+    SpawnIntentAPI["spawn-intent API"]
+    SpawnAPI["Spawn API"]
+    SpawnStatusAPI["spawn-status API"]
+    DropletTokenAPI["droplet-token API"]
+    DropletFileAPI["droplet-file API"]
+    SolanaRPC["Solana RPC"]
+    DOAPI["DigitalOcean API"]
+    LaunchesAPI --> Firestore
+    SpawnIntentAPI -->|"verify treasury tx"| SolanaRPC
+    SpawnIntentAPI --> Firestore
+    SpawnAPI -->|"POST /v2/droplets with size"| DOAPI
+    SpawnAPI --> Firestore
+    SpawnStatusAPI -->|"GET /v2/droplets/:id"| DOAPI
+    DOAPI -->|"dropletId, dropletIp"| SpawnStatusAPI
+    SpawnStatusAPI --> Firestore
+    DropletTokenAPI -->|"store bundle by token"| Firestore
+    DropletFileAPI -->|"GET .droplet one-time"| Firestore
+  end
+
+  subgraph DOLayer["DIGITALOCEAN DROPLETS"]
+    Droplet["Droplet (minimal Ubuntu)"]
+    UserData["user_data (optional minimal cloud-init)"]
+    UserDataNote["no Docker or OpenClaw container"]
+    DOAPI -->|"user_data"| Droplet
+    Droplet --> UserData
+    UserData --> UserDataNote
+  end
