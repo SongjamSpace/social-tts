@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
+import { Readable } from "stream";
+import path from "path";
+import fs from "fs";
+import os from "os";
 import { getAdminFirestore } from "@/services/firebase-admin.service";
 
 const OPENCLAW_DROPLET_TOKENS = "openclaw_droplet_tokens";
 
 /**
  * GET /api/openclaw/droplet-file?t=TOKEN
- * Returns the .droplet file as attachment and deletes the token (one-time use).
+ * Returns the .droplet file as attachment (streamed from temp file, same pattern as releases route) and deletes the token (one-time use).
  */
 export async function GET(request: Request) {
+  let tempPath: string | null = null;
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("t")?.trim();
@@ -34,19 +39,48 @@ export async function GET(request: Request) {
     await docRef.delete();
 
     const filename = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
-    const body = Buffer.from(bundle, "utf8");
+    tempPath = path.join(os.tmpdir(), `droplet-${token}.droplet`);
 
-    return new NextResponse(body, {
+    await fs.promises.writeFile(tempPath, bundle, "utf8");
+    const stat = await fs.promises.stat(tempPath);
+
+    const pathToDelete = tempPath;
+    const nodeStream = fs.createReadStream(pathToDelete);
+    nodeStream.on("end", () => {
+      try {
+        if (pathToDelete) fs.unlinkSync(pathToDelete);
+      } catch {
+        // ignore
+      }
+    });
+    nodeStream.on("error", () => {
+      try {
+        if (pathToDelete) fs.unlinkSync(pathToDelete);
+      } catch {
+        // ignore
+      }
+    });
+
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+
+    return new NextResponse(webStream, {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": String(body.length),
+        "Content-Length": String(stat.size),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (e) {
+    if (tempPath) {
+      try {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      } catch {
+        // ignore
+      }
+    }
     console.error("[openclaw/droplet-file]", e);
     return NextResponse.json(
       { error: "Failed to fetch droplet file" },
