@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import Link from "next/link";
 
@@ -10,14 +11,28 @@ import Link from "next/link";
  */
 export default function ProfilePage() {
   const router = useRouter();
+  const { ready, connectWallet } = usePrivy();
   const { wallets } = useWallets();
   const wallet = wallets?.[0]?.address;
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     if (wallet) {
       router.replace(`/profile/${encodeURIComponent(wallet)}`);
     }
   }, [wallet, router]);
+
+  const handleConnect = async () => {
+    if (!ready || wallet) return;
+    setConnecting(true);
+    try {
+      await connectWallet();
+    } catch (e) {
+      console.warn("Connect wallet error:", e);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   if (wallet) {
     return (
@@ -33,14 +48,20 @@ export default function ProfilePage() {
       <p className="text-zinc-400 text-sm text-center max-w-md mb-6">
         Connect your wallet to see your tokenized agents and hatch status.
       </p>
-      <Link
-        href="/openclaw"
-        className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 text-sm"
+      <button
+        type="button"
+        onClick={handleConnect}
+        disabled={!ready || connecting}
+        className="rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-bold py-2.5 px-4 text-sm transition-colors"
       >
-        Connect on OpenClaw
-      </Link>
+        {connecting ? "Connecting..." : "Connect wallet"}
+      </button>
       <p className="text-zinc-500 text-xs mt-4">
-        Or connect from the Eve home page.
+        Or connect from the{" "}
+        <Link href="/openclaw" className="text-red-400 hover:text-red-300 underline">
+          OpenClaw
+        </Link>{" "}
+        or Eve home page.
       </p>
     </div>
   );
