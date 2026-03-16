@@ -3,13 +3,14 @@ import { Readable } from "stream";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { put } from "@vercel/blob";
 import { getAdminFirestore } from "@/services/firebase-admin.service";
 
 const OPENCLAW_DROPLET_TOKENS = "openclaw_droplet_tokens";
 
 /**
  * GET /api/openclaw/droplet-file?t=TOKEN
- * Returns the .droplet file as attachment (streamed from temp file, same pattern as releases route) and deletes the token (one-time use).
+ * One-time use: returns the .droplet file. When BLOB_READ_WRITE_TOKEN is set, uploads to Vercel Blob and redirects to the blob URL so Android's download manager receives the file from CDN (same as APK from GitHub). Otherwise streams from a temp file.
  */
 export async function GET(request: Request) {
   let tempPath: string | null = null;
@@ -39,6 +40,20 @@ export async function GET(request: Request) {
     await docRef.delete();
 
     const filename = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
+
+    // Prefer Vercel Blob: serve file from CDN so Android download manager gets it (same pattern as APK from GitHub).
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const pathname = `openclaw-droplet/${token}.droplet`;
+      const body = Buffer.from(bundle, "utf8");
+      const blob = await put(pathname, body, {
+        access: "public",
+        contentType: "application/octet-stream",
+        addRandomSuffix: false,
+      });
+      const downloadUrl = blob.downloadUrl ?? `${blob.url}?download=1`;
+      return NextResponse.redirect(downloadUrl, 302);
+    }
+
     tempPath = path.join(os.tmpdir(), `droplet-${token}.droplet`);
 
     await fs.promises.writeFile(tempPath, bundle, "utf8");
