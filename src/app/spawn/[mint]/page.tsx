@@ -457,6 +457,25 @@ KEY`;
         // ignore
       }
     };
+    const downloadDropletFile = () => {
+      if (!privateKeyPem || !dropletIp) return;
+      const bundle: OpenClawConnectionBundle = {
+        version: 1,
+        host: dropletIp,
+        port: 22,
+        user: "root",
+        privateKeyPem,
+        mint: mint ?? undefined,
+        label: launch?.seedPayload?.name ? `OpenClaw: ${launch.seedPayload.name}` : undefined,
+      };
+      const blob = new Blob([JSON.stringify(bundle, null, 0)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
     return (
       <div className="min-h-[calc(100vh-3.5rem)] bg-[#060608] text-white px-4 py-8">
         <div className="max-w-lg mx-auto">
@@ -499,30 +518,28 @@ KEY`;
                   <p className="text-zinc-400 text-sm mb-3">
                     Download the .droplet file below, then double-click it. Agent Connect will open with this connection—no need to use Import inside the app.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const bundle: OpenClawConnectionBundle = {
-                        version: 1,
-                        host: dropletIp,
-                        port: 22,
-                        user: "root",
-                        privateKeyPem,
-                        mint: mint ?? undefined,
-                        label: launch?.seedPayload?.name ? `OpenClaw: ${launch.seedPayload.name}` : undefined,
-                      };
-                      const blob = new Blob([JSON.stringify(bundle, null, 0)], { type: "application/json" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium py-2.5 px-4"
-                  >
-                    Download .droplet file
-                  </button>
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadDropletFile();
+                        window.open(AGENT_CONNECT_ANDROID_DOWNLOAD_URL, "_blank");
+                      }}
+                      className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 px-4 text-sm"
+                    >
+                      Download for Android (APK + .droplet)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadDropletFile}
+                      className="inline-flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium py-2.5 px-4 border border-white/20"
+                    >
+                      Download .droplet file
+                    </button>
+                  </div>
+                  <p className="text-zinc-500 text-[10px] mb-1">
+                    Just need the connection file? (Mac or already have the app) Use the .droplet button above.
+                  </p>
                   <p className="text-zinc-500 text-[10px] mt-2">
                     This file contains your private key. Store it securely. Double-click the .droplet file after download to open it in Agent Connect (no need to use Import inside the app).
                   </p>
