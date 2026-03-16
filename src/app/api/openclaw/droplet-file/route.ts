@@ -34,15 +34,16 @@ export async function GET(request: Request) {
     await docRef.delete();
 
     const filename = `openclaw-${mint ? mint.slice(0, 8) : "droplet"}.droplet`;
-    const byteLength = Buffer.byteLength(bundle, "utf8");
+    const body = Buffer.from(bundle, "utf8");
 
-    return new NextResponse(bundle, {
+    return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": String(byteLength),
+        "Content-Length": String(body.length),
         "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (e) {

@@ -511,9 +511,6 @@ KEY`;
             </div>
             {privateKeyPem && dropletIp ? (
               <>
-                <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-4">
-                  Droplet is finishing setup. Wait 1–2 minutes before connecting, or you may see connection or authentication errors.
-                </p>
                 <div>
                   <p className="text-sm font-semibold text-white mb-2">2. Download .droplet file and double-click to open in Agent Connect</p>
                   <p className="text-zinc-400 text-sm mb-3">
