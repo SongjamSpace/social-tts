@@ -22,8 +22,8 @@ function EveLogoIcon({ className }: { className?: string }) {
 const BIP_OPTIONS = [
   { id: "001", label: "#001", href: "https://moltspaces.com/pumpfun", external: true },
   { id: "002", label: "#002", href: "/voices", external: false },
-  { id: "003", label: "#003", href: "/", external: false },
-  { id: "004", label: "#004", href: "/openclaw", external: false },
+  { id: "003", label: "#003", href: "/bip/003", external: false },
+  { id: "004", label: "#004", href: "/", external: false },
   { id: "005", label: "Profile", href: "/profile", external: false },
 ];
 
@@ -58,12 +58,12 @@ export default function Navbar() {
               type="button"
               onClick={() => setBipOpen((o) => !o)}
               className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname?.startsWith("/profile")
+                pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname === "/bip/003" || pathname?.startsWith("/profile")
                   ? "text-white"
                   : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {(pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname?.startsWith("/profile")) && (
+              {(pathname === "/voices" || pathname === "/" || pathname === "/openclaw" || pathname === "/bip/003" || pathname?.startsWith("/profile")) && (
                 <motion.div
                   layoutId="nav-pill"
                   className="absolute inset-0 rounded-lg bg-white/[0.06] border border-white/10"
