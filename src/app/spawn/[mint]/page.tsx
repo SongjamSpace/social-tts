@@ -201,6 +201,7 @@ export default function SpawnPage({
   const [sshPublicKey, setSshPublicKey] = useState<string | null>(null);
   const [privateKeyPem, setPrivateKeyPem] = useState<string | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
+  const [androidOpening, setAndroidOpening] = useState(false);
 
   const wallet = wallets?.[0];
   const walletAddress = wallet?.address;
@@ -521,16 +522,50 @@ KEY`;
                   <div className="flex flex-wrap gap-3 mb-3">
                     <button
                       type="button"
-                      onClick={() => {
-                        downloadDropletFile();
-                        // Delay opening APK tab so the .droplet blob download is offered first (mobile in-app browsers often drop it if we open a new tab immediately)
-                        setTimeout(() => {
-                          window.open(AGENT_CONNECT_ANDROID_DOWNLOAD_URL, "_blank");
-                        }, 600);
+                      disabled={androidOpening}
+                      onClick={async () => {
+                        if (!privateKeyPem || !dropletIp || !mint || !walletAddress) return;
+                        setAndroidOpening(true);
+                        setError(null);
+                        try {
+                          const dropletBundle: OpenClawConnectionBundle = {
+                            version: 1,
+                            host: dropletIp,
+                            port: 22,
+                            user: "root",
+                            privateKeyPem,
+                            mint,
+                            label: launch?.seedPayload?.name ? `OpenClaw: ${launch.seedPayload.name}` : undefined,
+                          };
+                          const res = await fetch("/api/openclaw/droplet-token", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ mint, wallet: walletAddress, dropletBundle }),
+                          });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) {
+                            setError((data?.error as string) || "Failed to prepare download. Try again.");
+                            return;
+                          }
+                          const token = data?.token as string | undefined;
+                          if (!token) {
+                            setError("Invalid response. Try again.");
+                            return;
+                          }
+                          const origin = typeof window !== "undefined" ? window.location.origin : "";
+                          window.open(
+                            `${origin}/spawn/${encodeURIComponent(mint)}/android-download?t=${encodeURIComponent(token)}`,
+                            "_blank"
+                          );
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : "Failed to open download page.");
+                        } finally {
+                          setAndroidOpening(false);
+                        }
                       }}
-                      className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 px-4 text-sm"
+                      className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-semibold py-2.5 px-4 text-sm"
                     >
-                      Download for Android (APK + .droplet)
+                      {androidOpening ? "Opening download page…" : "Download for Android (APK + .droplet)"}
                     </button>
                     <button
                       type="button"

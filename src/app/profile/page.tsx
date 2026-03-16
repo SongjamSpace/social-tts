@@ -46,7 +46,7 @@ export default function ProfilePage() {
     <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center bg-[#060608] text-white px-4">
       <h1 className="text-xl font-bold text-white mb-2">My Profile</h1>
       <p className="text-zinc-400 text-sm text-center max-w-md mb-6">
-        Connect your wallet to see your tokenized agents and hatch status.
+        Connect your wallet to see your tokenized agents and spawn status.
       </p>
       <button
         type="button"
