@@ -25,6 +25,11 @@ export interface OpenClawConnectionBundle {
 /** URL to download Agent Connect desktop app (Mac .dmg). Update when app is hosted. */
 const AGENT_CONNECT_DOWNLOAD_URL = "/agent-connect/releases/latest";
 
+/** URL to download Agent Connect Android APK. Env override or self-hosted release path. */
+const AGENT_CONNECT_ANDROID_DOWNLOAD_URL =
+  process.env.NEXT_PUBLIC_AGENT_CONNECT_ANDROID_DOWNLOAD_URL?.trim() ||
+  "/agent-connect/releases/Agent-Connect-0.1.0.apk";
+
 interface SeedPayload {
   name?: string;
   ticker?: string;
@@ -460,16 +465,26 @@ KEY`;
             <div>
               <p className="text-sm font-semibold text-white mb-2">1. Download Agent Connect</p>
               <p className="text-zinc-400 text-sm mb-4">
-                Install the desktop app (Mac). You’ll use it to connect to your droplet and run the agent setup.
+                Install the desktop app (Mac) or the Android app. You’ll use it to connect to your droplet and run the agent setup.
               </p>
-              <a
-                href={AGENT_CONNECT_DOWNLOAD_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-5 text-sm w-full sm:w-auto"
-              >
-                Download Agent Connect (Mac)
-              </a>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={AGENT_CONNECT_DOWNLOAD_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-5 text-sm"
+                >
+                  Download Agent Connect (Mac)
+                </a>
+                <a
+                  href={AGENT_CONNECT_ANDROID_DOWNLOAD_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold py-3 px-5 text-sm border border-white/20"
+                >
+                  Download Agent Connect (Android APK)
+                </a>
+              </div>
             </div>
             {privateKeyPem && dropletIp ? (
               <>
@@ -637,7 +652,7 @@ KEY`;
       <div className="max-w-md mx-auto">
         <h1 className="text-xl font-bold text-white mb-2">Spawn droplet</h1>
         <p className="text-zinc-500 text-sm mb-6">
-          Choose a droplet size and pay in SOL. You’ll get a minimal Ubuntu VPS; then SSH in and install OpenClaw using the on-screen guide.
+          Choose a droplet size and pay in SOL. You’ll get a minimal Ubuntu VPS; then SSH in and install OpenClaw using Agent Connect.
         </p>
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 

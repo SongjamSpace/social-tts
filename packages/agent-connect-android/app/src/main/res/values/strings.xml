@@ -14,4 +14,5 @@
     <string name="navigate_up">Navigate up</string>
     <string name="navigate_down">Navigate down</string>
     <string name="navigate_right">Navigate right</string>
+    <string name="space_key">Space key</string>
 </resources>

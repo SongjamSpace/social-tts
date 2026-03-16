@@ -11,7 +11,8 @@
     "make-eve-favicon": "node scripts/make-eve-favicon.mjs",
     "make-clawk-favicon": "node scripts/round-clawk-favicon.mjs",
     "invert-eve-logo": "node scripts/invert-eve-logo.mjs",
-    "eve-logo-white-on-black": "node scripts/eve-logo-white-on-black.mjs"
+    "eve-logo-white-on-black": "node scripts/eve-logo-white-on-black.mjs",
+    "backfill-openclaw": "node scripts/backfill-openclaw-launch.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

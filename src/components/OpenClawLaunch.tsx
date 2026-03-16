@@ -206,26 +206,34 @@ export default function OpenClawLaunch({
       const mintB58 = mint.publicKey.toBase58();
       const creatorAddress = solanaWallet.address;
 
-      try {
-        await fetch("/api/openclaw/launch-record", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mint: mintB58,
-            creator: creatorAddress,
-            seedPayload: seedPayload ?? {
-              name: trimmedName,
-              ticker: trimmedSymbol,
-              description: description?.trim() ?? "",
-              twitter: twitterUrl.trim() || undefined,
-              website: websiteUrl.trim() || undefined,
-              telegram: telegramUrl.trim() || undefined,
-              imageUrl: imageUrl ?? undefined,
-            },
-          }),
-        });
-      } catch (e) {
-        console.warn("Launch record error (token is live):", e);
+      const launchPayload = {
+        mint: mintB58,
+        creator: creatorAddress,
+        seedPayload: seedPayload ?? {
+          name: trimmedName,
+          ticker: trimmedSymbol,
+          description: description?.trim() ?? "",
+          twitter: twitterUrl.trim() || undefined,
+          website: websiteUrl.trim() || undefined,
+          telegram: telegramUrl.trim() || undefined,
+          imageUrl: imageUrl ?? undefined,
+        },
+      };
+      const maxLaunchRecordRetries = 3;
+      for (let attempt = 1; attempt <= maxLaunchRecordRetries; attempt++) {
+        try {
+          const res = await fetch("/api/openclaw/launch-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(launchPayload),
+          });
+          if (res.ok) break;
+          if (attempt < maxLaunchRecordRetries) await new Promise((r) => setTimeout(r, 1000 * attempt));
+          else console.warn("Launch record failed after retries (token is live):", await res.text());
+        } catch (e) {
+          if (attempt < maxLaunchRecordRetries) await new Promise((r) => setTimeout(r, 1000 * attempt));
+          else console.warn("Launch record error (token is live):", e);
+        }
       }
 
       setStatusMsg("Deploying agent...");

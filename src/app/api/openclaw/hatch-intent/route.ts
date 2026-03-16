@@ -29,9 +29,10 @@ function decodeMemoData(data: unknown): string | null {
 }
 
 function getTreasury(): string | null {
-  return process.env.OPENCLAW_HATCH_TREASURY_WALLET?.trim() || null;
+  return process.env.OPENCLAW_SPAWN_TREASURY_WALLET?.trim() || null;
 }
 
+/** Hatch price in SOL. Default 0.5 when OPENCLAW_HATCH_PRICE_SOL is unset (optional override for admins). */
 function getPriceSol(): number {
   const v = process.env.OPENCLAW_HATCH_PRICE_SOL;
   if (v == null || v === "") return 0.5;

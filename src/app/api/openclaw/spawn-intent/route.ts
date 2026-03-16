@@ -8,9 +8,15 @@ const SPAWN_INTENTS = "spawn_intents";
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const LAMPORTS_PER_SOL = 1e9;
 
-/** Spawn price in SOL by size (plan: 2gb → 0.005, 4gb → 0.01). */
+/** Spawn price in SOL by size (from OPENCLAW_SPAWN_PRICE_2GB_SOL / OPENCLAW_SPAWN_PRICE_4GB_SOL; defaults 0.005, 0.01). */
 function getAmountSolBySize(size: "2gb" | "4gb"): number {
-  return size === "4gb" ? 0.01 : 0.005;
+  const v2 = process.env.OPENCLAW_SPAWN_PRICE_2GB_SOL;
+  const v4 = process.env.OPENCLAW_SPAWN_PRICE_4GB_SOL;
+  const n2 = v2 != null && v2 !== "" ? parseFloat(v2) : NaN;
+  const n4 = v4 != null && v4 !== "" ? parseFloat(v4) : NaN;
+  const sol2 = Number.isFinite(n2) && n2 >= 0 ? n2 : 0.005;
+  const sol4 = Number.isFinite(n4) && n4 >= 0 ? n4 : 0.01;
+  return size === "4gb" ? sol4 : sol2;
 }
 
 /** Decode instruction data to UTF-8 memo text (handles base58 string or Uint8Array from RPC). */
@@ -34,7 +40,7 @@ function decodeMemoData(data: unknown): string | null {
 }
 
 function getTreasury(): string | null {
-  return process.env.OPENCLAW_HATCH_TREASURY_WALLET?.trim() || null;
+  return process.env.OPENCLAW_SPAWN_TREASURY_WALLET?.trim() || null;
 }
 
 /**
