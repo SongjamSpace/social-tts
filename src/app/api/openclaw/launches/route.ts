@@ -3,9 +3,13 @@ import { getAdminFirestore } from "@/services/firebase-admin.service";
 
 const OPENCLAW_LAUNCHES = "openclaw_launches";
 
+/** When set (e.g. in prod), only this mint is returned from the launches API. Unset to show all. */
+const PROD_SINGLE_MINT = process.env.NEXT_PUBLIC_OPENCLAW_PROD_SINGLE_MINT?.trim() || null;
+
 /**
  * GET /api/openclaw/launches?creator=WALLET
  * Returns OpenClaw launch records for the given creator wallet (for profile "my agents").
+ * When NEXT_PUBLIC_OPENCLAW_PROD_SINGLE_MINT is set, only that mint is returned (temporary prod filter).
  */
 export async function GET(request: Request) {
   try {
@@ -24,7 +28,7 @@ export async function GET(request: Request) {
       .where("creator", "==", creator)
       .get();
 
-    const launches = snapshot.docs.map((doc) => {
+    let launches = snapshot.docs.map((doc) => {
       const d = doc.data();
       return {
         mint: d.mint,
@@ -36,6 +40,10 @@ export async function GET(request: Request) {
         dropletIp: d.dropletIp ?? null,
       };
     });
+
+    if (PROD_SINGLE_MINT) {
+      launches = launches.filter((l) => l.mint === PROD_SINGLE_MINT);
+    }
 
     return NextResponse.json({ success: true, launches });
   } catch (e) {

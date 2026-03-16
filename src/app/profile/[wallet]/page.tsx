@@ -112,11 +112,21 @@ export default function ProfileWalletPage({
   };
   // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
   const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
-  const displayTokens = agentTokens.map((item) => {
+
+  // Temporary prod filter: when set, only this mint is shown (hide all others). Unset to show all.
+  const prodSingleMint =
+    typeof process.env.NEXT_PUBLIC_OPENCLAW_PROD_SINGLE_MINT === "string"
+      ? process.env.NEXT_PUBLIC_OPENCLAW_PROD_SINGLE_MINT.trim() || null
+      : null;
+
+  const displayTokensRaw = agentTokens.map((item) => {
     const overrideCap = TEST_MINT_BONDED_OVERRIDES[item.mint];
     if (overrideCap != null) return { ...item, complete: true, usd_market_cap: overrideCap };
     return item;
   });
+  const displayTokens = prodSingleMint
+    ? displayTokensRaw.filter((t) => t.mint === prodSingleMint)
+    : displayTokensRaw;
 
   function formatMarketCap(mcap: number | undefined): string {
     if (mcap == null || !Number.isFinite(mcap)) return "—";
