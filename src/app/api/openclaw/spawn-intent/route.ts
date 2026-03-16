@@ -8,14 +8,14 @@ const SPAWN_INTENTS = "spawn_intents";
 const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const LAMPORTS_PER_SOL = 1e9;
 
-/** Spawn price in SOL by size (from OPENCLAW_SPAWN_PRICE_2GB_SOL / OPENCLAW_SPAWN_PRICE_4GB_SOL; defaults 0.005, 0.01). */
+/** Spawn price in SOL by size (from OPENCLAW_SPAWN_PRICE_2GB_SOL / OPENCLAW_SPAWN_PRICE_4GB_SOL; defaults 0.5, 1). */
 function getAmountSolBySize(size: "2gb" | "4gb"): number {
   const v2 = process.env.OPENCLAW_SPAWN_PRICE_2GB_SOL;
   const v4 = process.env.OPENCLAW_SPAWN_PRICE_4GB_SOL;
   const n2 = v2 != null && v2 !== "" ? parseFloat(v2) : NaN;
   const n4 = v4 != null && v4 !== "" ? parseFloat(v4) : NaN;
-  const sol2 = Number.isFinite(n2) && n2 >= 0 ? n2 : 0.005;
-  const sol4 = Number.isFinite(n4) && n4 >= 0 ? n4 : 0.01;
+  const sol2 = Number.isFinite(n2) && n2 >= 0 ? n2 : 0.5;
+  const sol4 = Number.isFinite(n4) && n4 >= 0 ? n4 : 1;
   return size === "4gb" ? sol4 : sol2;
 }
 
