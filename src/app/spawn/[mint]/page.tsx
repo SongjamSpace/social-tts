@@ -652,7 +652,7 @@ KEY`;
       <div className="max-w-md mx-auto">
         <h1 className="text-xl font-bold text-white mb-2">Spawn droplet</h1>
         <p className="text-zinc-500 text-sm mb-6">
-          Choose a droplet size and pay in SOL. You’ll get a minimal Ubuntu VPS; then SSH in and install OpenClaw using the on-screen guide.
+          Choose a droplet size and pay in SOL. You’ll get a minimal Ubuntu VPS; then SSH in and install OpenClaw using Agent Connect.
         </p>
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
