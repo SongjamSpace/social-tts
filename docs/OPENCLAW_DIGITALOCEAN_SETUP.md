@@ -19,6 +19,7 @@ Add these to your `.env.local` (and to your production env, e.g. Vercel):
 | `DIGITALOCEAN_DROPLET_SIZE` | No | Droplet size when using Droplets (default: `s-1vcpu-1gb`). |
 | `DIGITALOCEAN_DROPLET_IMAGE` | No | Droplet image slug for cloud-init (default: `docker-20-04`). Use an Ubuntu or Docker image so cloud-init and Docker are available. |
 | `NEXT_PUBLIC_OPENCLAW_AGENT_STUB_URL` | No | Fallback URL shown when DO is not configured or deploy fails (e.g. a placeholder or docs link). |
+| `BLOB_READ_WRITE_TOKEN` | No (recommended for Android) | Vercel Blob token. When set, the one-time .droplet download is served via redirect to Blob storage so Android’s download manager receives the file from the CDN (avoids “Download unsuccessful”). Create a Blob store in the Vercel project and add the token to env. |
 
 **Minimal example (custom minimal agent, port 8080):**
 
