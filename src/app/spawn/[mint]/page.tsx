@@ -8,8 +8,8 @@ import { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgr
 const LAMPORTS_PER_SOL = 1e9;
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
-/** SOL amount by size (plan: 2gb → 0.005, 4gb → 0.01). */
-const AMOUNT_BY_SIZE = { "2gb": 0.005, "4gb": 0.01 } as const;
+/** SOL amount by size (2gb → 0.5, 4gb → 1). */
+const AMOUNT_BY_SIZE = { "2gb": 0.5, "4gb": 1 } as const;
 
 /** Agent Connect connection bundle (client-side only; contains private key – treat as secret). */
 export interface OpenClawConnectionBundle {
@@ -22,13 +22,16 @@ export interface OpenClawConnectionBundle {
   label?: string;
 }
 
-/** URL to download Agent Connect desktop app (Mac .dmg). Update when app is hosted. */
+/** URL to download Agent Connect desktop app (Mac .dmg). Goes to /releases/latest which redirects to GitHub or env override. */
 const AGENT_CONNECT_DOWNLOAD_URL = "/agent-connect/releases/latest";
 
-/** URL to download Agent Connect Android APK. Env override or self-hosted release path. */
+/** Default: GitHub release APK (SongjamSpace/agent-connect). Override with NEXT_PUBLIC_AGENT_CONNECT_ANDROID_DOWNLOAD_URL. */
+const GITHUB_RELEASE_APK_URL =
+  "https://github.com/SongjamSpace/agent-connect/releases/download/v0.1.0/app-debug.apk";
+
 const AGENT_CONNECT_ANDROID_DOWNLOAD_URL =
   process.env.NEXT_PUBLIC_AGENT_CONNECT_ANDROID_DOWNLOAD_URL?.trim() ||
-  "/agent-connect/releases/Agent-Connect-0.1.0.apk";
+  GITHUB_RELEASE_APK_URL;
 
 interface SeedPayload {
   name?: string;
@@ -670,7 +673,7 @@ KEY`;
                 }`}
               >
                 <span className="font-semibold block">2 GB RAM</span>
-                <span className="text-xs">0.005 SOL</span>
+                <span className="text-xs">0.5 SOL</span>
               </button>
               <button
                 type="button"
@@ -682,9 +685,12 @@ KEY`;
                 }`}
               >
                 <span className="font-semibold block">4 GB RAM</span>
-                <span className="text-xs">0.01 SOL</span>
+                <span className="text-xs">1 SOL</span>
               </button>
             </div>
+            <p className="text-zinc-500 text-xs">
+              Pay as you go, top-up your account with more SOL only when required.
+            </p>
             <button
               type="button"
               onClick={createIntent}
