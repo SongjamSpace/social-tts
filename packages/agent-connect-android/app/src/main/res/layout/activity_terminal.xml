@@ -112,6 +112,24 @@
         android:orientation="horizontal"
         android:padding="8dp"
         android:background="#1A1A1A"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_space"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SPACE"
+            android:contentDescription="@string/space_key"
+            android:textAllCaps="false"
+            style="?attr/materialButtonOutlinedStyle" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#1A1A1A"
         android:gravity="center_vertical"
         android:baselineAligned="false">
 

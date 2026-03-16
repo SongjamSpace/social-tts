@@ -112,14 +112,12 @@ class SshSession(
     }
 
     private fun copyStream(input: InputStream, onChunk: (String) -> Unit) {
-        val ansiStrip = AnsiStrip()
         try {
             val buf = ByteArray(4096)
             var n: Int
             while (input.read(buf).also { n = it } != -1 && !closed.get()) {
                 val s = String(buf, 0, n, Charsets.UTF_8)
-                val cleaned = ansiStrip.process(s)
-                if (cleaned.isNotEmpty()) onChunk(cleaned)
+                if (s.isNotEmpty()) onChunk(s)
             }
         } catch (_: Exception) { }
         if (!closed.get()) onClosed()

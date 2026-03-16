@@ -3,6 +3,8 @@ package ai.eve.agentconnect
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.style.BackgroundColorSpan
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
@@ -11,6 +13,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 
 class TerminalActivity : AppCompatActivity() {
 
@@ -23,6 +26,8 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var scrollView: ScrollView
     private lateinit var inputField: EditText
     private var statusBar: TextView? = null
+    private val terminalBuffer = TerminalBuffer(width = 120, maxLines = 500)
+    private val ansiStripForStatus = AnsiStrip()
     private val outputFilter = TuiOutputFilter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,26 +59,32 @@ class TerminalActivity : AppCompatActivity() {
         session = SshSession(
             bundle = bundle,
             onOutput = { text ->
-                outputFilter.process(
-                    chunk = text,
-                    onContent = { segment ->
-                        runOnUiThread {
-                            if (outputView.text == getString(R.string.connecting)) {
-                                outputView.text = ""
-                            }
-                            outputView.append(segment)
-                            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
-                        }
-                    },
-                    onStatus = { line ->
-                        runOnUiThread {
-                            statusBar?.let { bar ->
-                                bar.text = line
-                                bar.visibility = View.VISIBLE
+                terminalBuffer.process(text)
+                val cleanedForStatus = ansiStripForStatus.process(text)
+                if (cleanedForStatus.isNotEmpty()) {
+                    outputFilter.process(
+                        chunk = cleanedForStatus,
+                        onContent = { },
+                        onStatus = { line ->
+                            runOnUiThread {
+                                statusBar?.let { bar ->
+                                    bar.text = line
+                                    bar.visibility = View.VISIBLE
+                                }
                             }
                         }
+                    )
+                }
+                runOnUiThread {
+                    if (outputView.text == getString(R.string.connecting)) {
+                        outputView.text = ""
                     }
-                )
+                    val text = terminalBuffer.getDisplayText()
+                    val reverseLines = terminalBuffer.getReverseLines()
+                    val cursorRow = terminalBuffer.getCursorRow()
+                    outputView.text = applyFocusHighlight(text, reverseLines, cursorRow)
+                    scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+                }
             },
             onError = { msg ->
                 runOnUiThread {
@@ -128,6 +139,10 @@ class TerminalActivity : AppCompatActivity() {
             session?.sendRaw("\u001b[C")
         }
 
+        findViewById<Button>(R.id.btn_space).setOnClickListener {
+            session?.sendRaw(" ")
+        }
+
         findViewById<Button>(R.id.btn_disconnect).setOnClickListener {
             session?.close()
             session = null
@@ -135,11 +150,33 @@ class TerminalActivity : AppCompatActivity() {
         }
     }
 
+    private fun applyFocusHighlight(text: CharSequence, reverseLines: Set<Int>, cursorRow: Int): CharSequence {
+        if (text.isEmpty()) return text
+        val spannable = SpannableString(text)
+        val color = ContextCompat.getColor(this, R.color.terminal_focus_row_bg)
+        val linesToHighlight = if (reverseLines.isNotEmpty()) reverseLines else setOf(cursorRow)
+        val str = text.toString()
+        var lineStart = 0
+        var row = 0
+        while (lineStart <= str.length) {
+            val lineEnd = str.indexOf('\n', lineStart).let { if (it == -1) str.length else it }
+            if (row in linesToHighlight && lineStart < lineEnd) {
+                spannable.setSpan(BackgroundColorSpan(color), lineStart, lineEnd, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            row++
+            if (lineEnd >= str.length) break
+            lineStart = lineEnd + 1
+        }
+        return spannable
+    }
+
     private fun sendInput() {
         val line = inputField.text.toString()
         inputField.text.clear()
         if (line.isNotEmpty()) {
             session?.sendLine(line)
+        } else {
+            session?.sendRaw("\r")
         }
     }
 
