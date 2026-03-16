@@ -523,7 +523,10 @@ KEY`;
                       type="button"
                       onClick={() => {
                         downloadDropletFile();
-                        window.open(AGENT_CONNECT_ANDROID_DOWNLOAD_URL, "_blank");
+                        // Delay opening APK tab so the .droplet blob download is offered first (mobile in-app browsers often drop it if we open a new tab immediately)
+                        setTimeout(() => {
+                          window.open(AGENT_CONNECT_ANDROID_DOWNLOAD_URL, "_blank");
+                        }, 600);
                       }}
                       className="inline-flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 px-4 text-sm"
                     >
