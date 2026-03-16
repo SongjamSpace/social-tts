@@ -12,7 +12,6 @@ const root = join(__dirname, "..");
 
 const sources = [
   join(root, "public", "images", "moltspaces-logo-source.png"),
-  join(process.env.HOME || "", ".cursor", "projects", "Users-adamplace-moltspaces-ui-draft", "assets", "moltspaces-18849d45-3723-41fb-ad25-96865d5608be.png"),
 ];
 
 let inputPath = sources.find((p) => existsSync(p));

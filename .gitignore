@@ -20,6 +20,8 @@ public/openclaw-connect/releases/
 
 # PWA / TWA / Android
 *.keystore
+# Android local config (machine-specific SDK path)
+packages/agent-connect-android/local.properties
 manifest-checksum.txt
 
 # Generated PWA files (if using next-pwa)

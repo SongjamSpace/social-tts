@@ -104,10 +104,11 @@ export default function ProfileWalletPage({
           usd_market_cap: coin.usd_market_cap,
         }));
 
-  // Testing: pretend these mints are bonded with overridden market cap so hatch/Agent Connect UI is visible
+  // Testing: pretend these mints are bonded with overridden market cap so hatch/Agent Connect UI is visible (eligible to spawn)
   const TEST_MINT_BONDED_OVERRIDES: Record<string, number> = {
     "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve": 100_000,
     "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
+    "HbbEWDceTtVtV272zGKzVUQv31dE7x17Thx7qMM1xeve": 1_250_000, // $1.25M fake market cap for spawn eligibility
   };
   // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
   const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
