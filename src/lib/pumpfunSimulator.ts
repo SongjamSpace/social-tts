@@ -35,6 +35,7 @@ export type SimulatorPosition = {
   entryViewers: number;
   stakeSol: number;
   peakMarketCap: number;
+  profitLocked: boolean;
 };
 
 export type SimulatorTrade = {
@@ -49,7 +50,13 @@ export type SimulatorTrade = {
   entryTimestamp: number;
   exitTimestamp: number;
   holdMs: number;
-  exitReason: "take_profit" | "stop_loss" | "viewer_collapse" | "time_exit" | "trailing_stop";
+  exitReason:
+    | "take_profit"
+    | "stop_loss"
+    | "viewer_collapse"
+    | "time_exit"
+    | "trailing_stop"
+    | "sell_pressure";
 };
 
 export type SimulatorState = {
@@ -79,35 +86,35 @@ export type SimulatorConfig = {
   minViewers: number;
   maxViewers: number;
   viewerVelocity30s: number;
-  minMarketCap: number;
-  maxMarketCap: number;
-  minTokenAgeSeconds: number;
   buyPressureRequired: boolean;
   
   // Sell Conditions
   takeProfitRatio: number;
+  profitLockRatio: number;
   stopLossRatio: number;
   viewerCollapseRatio: number;
   timeExitMs: number;
   trailingStopTriggerRatio: number;
   trailingStopDropRatio: number;
+  sellPressureRatio: number;
+  minSellPressureTrades: number;
 };
 
 export const DEFAULT_SIM_CONFIG: SimulatorConfig = {
   minViewers: 8,
   maxViewers: 35,
   viewerVelocity30s: 4,
-  minMarketCap: 15_000,
-  maxMarketCap: 35_000,
-  minTokenAgeSeconds: 90,
-  buyPressureRequired: true,
+  buyPressureRequired: false,
   
-  takeProfitRatio: 2.0,
+  takeProfitRatio: 1.8,
+  profitLockRatio: 1.2,
   stopLossRatio: 0.7,
-  viewerCollapseRatio: 0.6,
+  viewerCollapseRatio: 0.55,
   timeExitMs: 6 * 60 * 1000,
-  trailingStopTriggerRatio: 3.0,
-  trailingStopDropRatio: 0.8,
+  trailingStopTriggerRatio: 1.5,
+  trailingStopDropRatio: 0.75,
+  sellPressureRatio: 1.8,
+  minSellPressureTrades: 8,
 };
 
 export class PumpfunLivestreamSimulator {
@@ -168,48 +175,44 @@ export class PumpfunLivestreamSimulator {
 
     // ENTRY STRATEGY
     if (!this.positions[mint]) {
-      if (viewers30s !== null && viewers60s !== null) {
-        const viewerVelocity = viewer_count - viewers30s;
-        
-        const results: CheckResult[] = [
-          { condition: "Min Viewers", status: viewer_count >= this.config.minViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.minViewers },
-          { condition: "Max Viewers", status: viewer_count <= this.config.maxViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.maxViewers },
-          { condition: "Viewer Velocity", status: viewerVelocity >= this.config.viewerVelocity30s ? "pass" : "fail", value: viewerVelocity, threshold: this.config.viewerVelocity30s },
-          { condition: "Viewer Trend", status: viewer_count > viewers60s ? "pass" : "fail", value: viewer_count, threshold: `> ${viewers60s}` },
-          { condition: "Min Mcap", status: market_cap >= this.config.minMarketCap ? "pass" : "fail", value: Math.round(market_cap), threshold: this.config.minMarketCap },
-          { condition: "Max Mcap", status: market_cap <= this.config.maxMarketCap ? "pass" : "fail", value: Math.round(market_cap), threshold: this.config.maxMarketCap },
-          { condition: "Token Age", status: token.token_age > this.config.minTokenAgeSeconds ? "pass" : "fail", value: Math.round(token.token_age), threshold: this.config.minTokenAgeSeconds },
-          { condition: "Buy Pressure", status: !this.config.buyPressureRequired || token.buy_tx_last_30s > token.sell_tx_last_30s ? "pass" : "fail", value: token.buy_tx_last_30s, threshold: `> ${token.sell_tx_last_30s}` }
-        ];
+      const viewerVelocity = viewers30s !== null ? viewer_count - viewers30s : null;
+      
+      const results: CheckResult[] = [
+        { condition: "Min Viewers", status: viewer_count >= this.config.minViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.minViewers },
+        { condition: "Max Viewers", status: viewer_count <= this.config.maxViewers ? "pass" : "fail", value: viewer_count, threshold: this.config.maxViewers },
+        { condition: "Viewer Velocity", status: viewerVelocity !== null && viewerVelocity >= this.config.viewerVelocity30s ? "pass" : "fail", value: viewerVelocity ?? "N/A", threshold: this.config.viewerVelocity30s },
+        { condition: "Viewer Trend", status: viewers60s !== null && viewer_count > viewers60s ? "pass" : "fail", value: viewers60s !== null ? viewer_count : "N/A", threshold: viewers60s !== null ? `> ${viewers60s}` : "N/A" },
+        { condition: "Buy Pressure", status: !this.config.buyPressureRequired || token.buy_tx_last_30s > token.sell_tx_last_30s ? "pass" : "fail", value: token.buy_tx_last_30s, threshold: `> ${token.sell_tx_last_30s}` }
+      ];
 
-        const meetsEntry = results.every(r => r.status === "pass");
+      const meetsEntry = results.every(r => r.status === "pass");
 
-        this.logs.unshift({
-          mint,
-          name: token.name ?? mint,
-          symbol: token.symbol ?? "",
-          timestamp: Date.now(),
-          results,
-          passed: meetsEntry
-        });
+      this.logs.unshift({
+        mint,
+        name: token.name ?? mint,
+        symbol: token.symbol ?? "",
+        timestamp: Date.now(),
+        results,
+        passed: meetsEntry
+      });
 
-        if (this.logs.length > 50) this.logs.pop();
+      if (this.logs.length > 50) this.logs.pop();
 
-        if (meetsEntry) {
-          const stakeSol = this.capital * this.riskPct;
-          if (stakeSol > 0 && this.capital >= stakeSol) {
-            this.positions[mint] = {
-              mint,
-              name: token.name ?? mint,
-              symbol: token.symbol ?? "",
-              entryMarketCap: market_cap,
-              entryTimestamp: timestamp,
-              entryViewers: viewer_count,
-              stakeSol,
-              peakMarketCap: market_cap
-            };
-            this.capital -= stakeSol;
-          }
+      if (meetsEntry) {
+        const stakeSol = this.capital * this.riskPct;
+        if (stakeSol > 0 && this.capital >= stakeSol) {
+          this.positions[mint] = {
+            mint,
+            name: token.name ?? mint,
+            symbol: token.symbol ?? "",
+            entryMarketCap: market_cap,
+            entryTimestamp: timestamp,
+            entryViewers: viewer_count,
+            stakeSol,
+            peakMarketCap: market_cap,
+            profitLocked: false
+          };
+          this.capital -= stakeSol;
         }
       }
     }
@@ -222,24 +225,36 @@ export class PumpfunLivestreamSimulator {
       pos.peakMarketCap = market_cap;
     }
 
-    const takeProfit = market_cap >= pos.entryMarketCap * this.config.takeProfitRatio;
     const stopLoss = market_cap <= pos.entryMarketCap * this.config.stopLossRatio;
     const viewerCollapse = viewer_count <= pos.entryViewers * this.config.viewerCollapseRatio;
     const timeExit = timestamp - pos.entryTimestamp >= this.config.timeExitMs;
     const trailingStop =
       pos.peakMarketCap >= pos.entryMarketCap * this.config.trailingStopTriggerRatio && 
       market_cap <= pos.peakMarketCap * this.config.trailingStopDropRatio;
+    const sellPressure =
+      !pos.profitLocked &&
+      token.sell_tx_last_30s >= this.config.minSellPressureTrades &&
+      token.sell_tx_last_30s >= Math.max(1, token.buy_tx_last_30s) * this.config.sellPressureRatio;
 
-    if (takeProfit) {
-      this.closePosition(mint, market_cap, timestamp, "take_profit");
-    } else if (stopLoss) {
+    if (!pos.profitLocked && market_cap >= pos.entryMarketCap * this.config.takeProfitRatio) {
+      pos.profitLocked = true;
+    }
+
+    const profitLock =
+      pos.profitLocked && market_cap <= pos.entryMarketCap * this.config.profitLockRatio;
+
+    if (stopLoss) {
       this.closePosition(mint, market_cap, timestamp, "stop_loss");
+    } else if (trailingStop) {
+      this.closePosition(mint, market_cap, timestamp, "trailing_stop");
+    } else if (profitLock) {
+      this.closePosition(mint, market_cap, timestamp, "take_profit");
+    } else if (sellPressure) {
+      this.closePosition(mint, market_cap, timestamp, "sell_pressure");
     } else if (viewerCollapse) {
       this.closePosition(mint, market_cap, timestamp, "viewer_collapse");
     } else if (timeExit) {
       this.closePosition(mint, market_cap, timestamp, "time_exit");
-    } else if (trailingStop) {
-      this.closePosition(mint, market_cap, timestamp, "trailing_stop");
     }
   }
 

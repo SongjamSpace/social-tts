@@ -13,7 +13,12 @@ import {
 } from "@/lib/pumpfunSimulator";
 
 export default function LiveTokensPage() {
-  const [coins, setCoins] = useState<PumpFunCoin[]>([]);
+  const [bucketCoins, setBucketCoins] = useState<PumpFunCoin[]>([]);
+  const [filteredCoins, setFilteredCoins] = useState<PumpFunCoin[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [fetchingMore, setFetchingMore] = useState(false);
+  const [filterConfig, setFilterConfig] = useState({ minCap: "5000", maxCap: "32000", minParticipants: "" });
+  
   const [viewerCounts, setViewerCounts] = useState<Record<string, number>>({});
   const [tradeCounts, setTradeCounts] = useState<Record<string, { buy: number; sell: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -117,40 +122,77 @@ export default function LiveTokensPage() {
     }
   };
 
-  const fetchLiveTokens = async () => {
+  const fetchLiveTokens = async (reset = false, fetchAll = false) => {
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+      } else {
+        setFetchingMore(true);
+      }
+      
       setError(null);
-      const res = await fetch("/api/pumpfun/live-streams");
+      const currentOffset = reset ? 0 : offset;
+      const limit = reset ? 50 : 950;
+      const res = await fetch(`/api/pumpfun/live-streams?offset=${currentOffset}&limit=${limit}${fetchAll ? '&fetchAll=true' : ''}`);
+      
       if (!res.ok) throw new Error("Failed to fetch live tokens");
       const data = await res.json();
       
-      setCoins(data);
+      if (reset) {
+        setBucketCoins(data);
+        setOffset(prev => prev + limit);
+      } else {
+        setBucketCoins(prev => {
+          const existingMints = new Set(prev.map(c => c.mint));
+          const newCoins = data.filter((c: PumpFunCoin) => !existingMints.has(c.mint));
+          return [...prev, ...newCoins];
+        });
+        setOffset(prev => prev + limit);
+      }
+      
       setLastUpdated(new Date());
       
-      // Trigger sequential token detail fetching
-      fetchTokenDetailsSequentially(data);
+      // Removed: fetchTokenDetailsSequentially(data);
+      // Details are now only fetched for filtered results to optimize performance
     } catch (err) {
       console.error("Error fetching live tokens:", err);
       setError("Failed to load live streams. Please try again later.");
     } finally {
       setLoading(false);
+      setFetchingMore(false);
     }
   };
 
+  const applyFilter = () => {
+    const min = filterConfig.minCap !== "" ? Number(filterConfig.minCap) : -Infinity;
+    const max = filterConfig.maxCap !== "" ? Number(filterConfig.maxCap) : Infinity;
+    const minP = filterConfig.minParticipants !== "" ? Number(filterConfig.minParticipants) : 0;
+
+    const filtered = bucketCoins.filter(coin => {
+      const cap = coin.usd_market_cap;
+      const participants = (coin as any).num_participants || coin.reply_count || 0;
+      return cap >= min && cap <= max && participants >= minP;
+    });
+
+    setFilteredCoins(filtered);
+    // Fetch details only for filtered coins
+    fetchTokenDetailsSequentially(filtered);
+  };
+
   useEffect(() => {
-    fetchLiveTokens();
-    const interval = setInterval(fetchLiveTokens, 60000); // Auto-refresh every minute
-    return () => clearInterval(interval);
+    fetchLiveTokens(true);
+    // Remove auto-refresh to maintain bucket stability during filtering
+    // const interval = setInterval(() => fetchLiveTokens(false), 60000); 
+    // return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (coins.length === 0) return;
+    if (filteredCoins.length === 0) return;
     const simulator = simulatorRef.current;
     if (!simulator) return;
 
     let processed = false;
-    for (const coin of coins) {
+    for (const coin of filteredCoins) {
       const viewer_count = viewerCounts[coin.mint];
       if (typeof viewer_count !== "number") continue;
       const market_cap = coin.usd_market_cap;
@@ -181,7 +223,18 @@ export default function LiveTokensPage() {
     if (processed) {
       setSimState(simulator.getState());
     }
-  }, [coins, viewerCounts, tradeCounts]);
+  }, [filteredCoins, viewerCounts, tradeCounts]);
+
+  // Periodic detail refresh for filtered coins to build simulator history
+  useEffect(() => {
+    if (filteredCoins.length === 0) return;
+
+    const interval = setInterval(() => {
+      fetchTokenDetailsSequentially(filteredCoins);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [filteredCoins]);
 
   const fmtSol = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(3)} SOL`;
   const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%`;
@@ -209,10 +262,10 @@ export default function LiveTokensPage() {
               <span className="text-red-500 text-xs font-bold uppercase tracking-widest">Live Streams</span>
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-              Currently Live <sup className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{coins.length} Online</sup>
+              Currently Live <sup className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{bucketCoins.length} Scanned</sup>
             </h1>
             <p className="text-zinc-500 mt-1 max-w-xl">
-              Recently traded tokens with active live streams. Track viewer counts and engagement before they bond.
+              Bucket contains {bucketCoins.length} tokens. Apply filters to see promising opportunities.
             </p>
           </div>
 
@@ -222,7 +275,7 @@ export default function LiveTokensPage() {
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
               <button
-                onClick={fetchLiveTokens}
+                onClick={() => fetchLiveTokens(true)}
                 disabled={loading}
                 className={`p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 transition-all ${loading ? 'animate-spin' : ''}`}
               >
@@ -232,9 +285,119 @@ export default function LiveTokensPage() {
           </div>
         </div>
 
-        {/* Content Section */}
+        {/* Section 1: Bucket & Controls */}
+        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 mb-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className="px-6 py-3 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1">Bucket Size</div>
+                <div className="text-2xl font-black text-white">{bucketCoins.length} <span className="text-zinc-600 text-sm font-normal">coins</span></div>
+              </div>
+              
+              <button
+                onClick={() => fetchLiveTokens(false, true)}
+                disabled={fetchingMore || bucketCoins.length >= 1000}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+              >
+                {fetchingMore ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+                ) : (
+                  <Activity className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                )}
+                Fetch Rest 950
+              </button>
+            </div>
+
+            <div className="h-px lg:h-12 lg:w-px bg-white/5" />
+
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-zinc-500 font-mono uppercase">Min Cap $</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={filterConfig.minCap}
+                  onChange={(e) => setFilterConfig(prev => ({ ...prev, minCap: e.target.value }))}
+                  className="w-32 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-zinc-500 font-mono uppercase">Max Cap $</label>
+                <input
+                  type="number"
+                  placeholder="∞"
+                  value={filterConfig.maxCap}
+                  onChange={(e) => setFilterConfig(prev => ({ ...prev, maxCap: e.target.value }))}
+                  className="w-32 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-zinc-500 font-mono uppercase">Min Participants</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={filterConfig.minParticipants}
+                  onChange={(e) => setFilterConfig(prev => ({ ...prev, minParticipants: e.target.value }))}
+                  className="w-24 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+              <button
+                onClick={applyFilter}
+                className="px-8 py-2 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center gap-2"
+              >
+                <Search className="w-4 h-4" />
+                Filter Coins
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bucket Preview Section */}
+        {bucketCoins.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                Scanned Bucket Preview
+                <span className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] lowercase font-mono">
+                  {bucketCoins.length} items
+                </span>
+              </h3>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide mask-fade-right">
+              {bucketCoins.map((coin) => (
+                <div 
+                  key={coin.mint}
+                  className="flex-shrink-0 w-28 group"
+                  onClick={() => window.open(`https://pump.fun/${coin.mint}`, '_blank')}
+                >
+                  <div className="relative aspect-square rounded-xl overflow-hidden border border-white/5 bg-white/[0.02] mb-2 group-hover:border-white/10 transition-colors">
+                    <img 
+                      src={coin.image_uri} 
+                      alt={coin.symbol}
+                      className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <div className="px-1">
+                    <div className="text-[10px] font-bold text-white truncate">{coin.symbol}</div>
+                    <div className="text-[9px] text-zinc-500 font-mono">${fmtCompact(coin.usd_market_cap)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Section 2: Results Section */}
+        <div className="mb-6">
+          <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Filtered Results <span className="text-zinc-500 font-mono text-sm font-normal">({filteredCoins.length} Matches)</span>
+          </h2>
+        </div>
+
         <AnimatePresence mode="wait">
-          {loading && coins.length === 0 ? (
+          {loading && bucketCoins.length === 0 ? (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -263,19 +426,43 @@ export default function LiveTokensPage() {
                 <p className="text-zinc-500 text-sm">{error}</p>
               </div>
               <button
-                onClick={fetchLiveTokens}
+                onClick={() => fetchLiveTokens(true)}
                 className="px-6 py-2 rounded-xl bg-white text-black font-bold hover:bg-zinc-200 transition-all"
               >
                 Try Again
               </button>
             </motion.div>
-          ) : coins.length > 0 ? (
+          ) : filteredCoins.length > 0 ? (
             <motion.div
               key="grid"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              <LiveTokenGrid coins={coins} viewerCounts={viewerCounts} />
+              <LiveTokenGrid coins={filteredCoins} viewerCounts={viewerCounts} />
+            </motion.div>
+          ) : bucketCoins.length > 0 ? (
+            <motion.div
+              key="no-filter"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-20 gap-4 text-center border border-dashed border-white/5 rounded-3xl bg-white/[0.01]"
+            >
+              <div className="p-4 rounded-full bg-white/5 border border-white/10 text-zinc-500">
+                <Search className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg">No Results Found</h3>
+                <p className="text-zinc-500 text-sm">Adjust your filters or fetch more coins to find what you're looking for.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setFilterConfig({ minCap: "", maxCap: "", minParticipants: "" });
+                  setFilteredCoins(bucketCoins);
+                }}
+                className="text-blue-500 text-sm font-bold hover:underline"
+              >
+                Clear all filters
+              </button>
             </motion.div>
           ) : (
             <motion.div
@@ -296,7 +483,7 @@ export default function LiveTokensPage() {
         </AnimatePresence>
 
         {/* Simulation Section */}
-        {coins.length > 0 && (
+        {filteredCoins.length > 0 && (
           <div className="mt-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
@@ -576,34 +763,6 @@ export default function LiveTokensPage() {
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Market Cap (Min / Max USD)</label>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={config.minMarketCap}
-                            onChange={(e) => setConfig({ ...config, minMarketCap: Number(e.target.value) })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                          />
-                          <span className="text-zinc-600">—</span>
-                          <input
-                            type="number"
-                            value={config.maxMarketCap}
-                            onChange={(e) => setConfig({ ...config, maxMarketCap: Number(e.target.value) })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Min Token Age (Seconds)</label>
-                        <input
-                          type="number"
-                          value={config.minTokenAgeSeconds}
-                          onChange={(e) => setConfig({ ...config, minTokenAgeSeconds: Number(e.target.value) })}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                        />
-                      </div>
 
                       <div className="flex items-center justify-between py-2">
                         <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Require Buy Pressure</label>
@@ -634,6 +793,17 @@ export default function LiveTokensPage() {
                       </div>
 
                       <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Profit Lock (Multiplier, e.g., 1.2)</label>
+                        <input
+                          type="number"
+                          step="0.05"
+                          value={config.profitLockRatio}
+                          onChange={(e) => setConfig({ ...config, profitLockRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
                         <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Stop Loss (Multiplier, e.g., 0.7)</label>
                         <input
                           type="number"
@@ -651,6 +821,28 @@ export default function LiveTokensPage() {
                           step="0.05"
                           value={config.viewerCollapseRatio}
                           onChange={(e) => setConfig({ ...config, viewerCollapseRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Sell Pressure (Ratio, e.g., 1.8)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={config.sellPressureRatio}
+                          onChange={(e) => setConfig({ ...config, sellPressureRatio: Number(e.target.value) })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Min Sell Trades (Last 30s)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={config.minSellPressureTrades}
+                          onChange={(e) => setConfig({ ...config, minSellPressureTrades: Number(e.target.value) })}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
@@ -705,11 +897,13 @@ export default function LiveTokensPage() {
                       simulatorRef.current.reset();
                       setSimState(simulatorRef.current.getState());
                     }
-                    setCoins([]);
+                    setBucketCoins([]);
+                    setFilteredCoins([]);
+                    setOffset(0);
                     setViewerCounts({});
                     setTradeCounts({});
                     setShowSettings(false);
-                    fetchLiveTokens();
+                    fetchLiveTokens(true);
                   }}
                   className="px-8 py-2 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] text-xs uppercase tracking-widest"
                 >
