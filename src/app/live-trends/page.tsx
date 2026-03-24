@@ -88,17 +88,21 @@ export default function LiveTrendsPage() {
           margin: 0.5rem 0;
         }
         .vertical-divider {
-          border-left: 1px solid #d1cdc2;
+          border-left: 1px solid #1a1a1a;
         }
         .drop-cap::first-letter {
           float: left;
-          font-size: 4.5rem;
-          line-height: 1;
-          padding-top: 4px;
-          padding-right: 8px;
+          font-size: 5rem;
+          line-height: 0.8;
+          padding-top: 8px;
+          padding-right: 12px;
           padding-left: 3px;
-          font-weight: 700;
+          font-weight: 800;
           color: #1a1a1a;
+          font-family: serif;
+        }
+        .market-brief-item:hover {
+          background: rgba(26, 26, 26, 0.03);
         }
         @media (max-width: 768px) {
           .vertical-divider {
@@ -169,22 +173,171 @@ export default function LiveTrendsPage() {
         </div>
       </div>
 
-      {/* Main Grid Content */}
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-12">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-32 space-y-4">
             <div className="w-12 h-12 border-4 border-[#1a1a1a] border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-bold tracking-widest text-[#1a1a1a]">PRINTING THE NEWS...</p>
+            <p className="font-bold tracking-widest text-[#1a1a1a]">RETRIEVING DISPATCHES...</p>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-12">
-            {/* News Stream */}
-            <div className="flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-12">
-                {trends.map((trend, idx) => (
+          <div className="space-y-24">
+            {/* FRONT PAGE SECTION (Top 15 Trends) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
+              
+              {/* LEFT SIDEBAR: MARKET BRIEFS (Trends 1-5) */}
+              <aside className="md:col-span-3 space-y-8">
+                <div className="border-t-4 border-b-2 border-[#1a1a1a] py-2 mb-6">
+                  <h3 className={`text-center text-sm font-black tracking-[0.2em] ${jetbrainsMono.className}`}>
+                    TOP TRENDS
+                  </h3>
+                </div>
+                
+                <div className="space-y-6">
+                  {trends.slice(1, 7).map((trend, i) => (
+                    <article key={i} className="market-brief-item border-b border-dashed border-[#d1cdc2] pb-4 last:border-0 group cursor-pointer">
+                      <h4 className="font-bold text-base leading-tight group-hover:underline uppercase mb-2">
+                        {trend.trend_name}
+                      </h4>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-[10px] font-bold ${jetbrainsMono.className}`}>
+                          {trend.tweet_count} REPS
+                        </span>
+                        {/* <span className={`text-xs font-black ${jetbrainsMono.className}`}>
+                          {trend.heat_score}🔥
+                        </span> */}
+                      </div>
+                    </article>
+                  ))}
+                  <div className="pt-4 text-center">
+                    <button className="text-[10px] font-bold hover:underline tracking-widest uppercase">VIEW ALL TRENDS</button>
+                  </div>
+                </div>
+
+                <div className="mt-12 bg-[#1a1a1a] p-1">
+                   <div className="border border-[#f4f1ea] p-4 text-[#f4f1ea] text-center">
+                      <div className="text-[10px] font-bold tracking-[0.3em] mb-2 uppercase opacity-60 italic">SPECIAL REPORT</div>
+                      <div className="font-bold text-lg leading-tight uppercase">Bitcoin Up or Down?</div>
+                      <div className="text-[10px] mt-2 opacity-50">9:30AM-9:45AM ET: SO CLOSE</div>
+                   </div>
+                </div>
+              </aside>
+
+              {/* CENTER COLUMN: FEATURED STORY (Trend 0) */}
+              <section className="md:col-span-6 space-y-8 md:border-x md:border-[#d1cdc2] md:px-8">
+                {trends[0] && (
+                  <article className="space-y-6">
+                    <div className="text-center">
+                       {trends[0].sentiment === "Negative" && (
+                         <span className="inline-block bg-[#7f1d1d] text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest mb-4">
+                           ⁕ CONTESTED ⁕
+                         </span>
+                       )}
+                       <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-[0.9] uppercase mb-4">
+                         {trends[0].trend_name}
+                       </h2>
+                       <div className={`flex justify-center items-center gap-3 text-[10px] font-bold uppercase tracking-widest mb-6 ${jetbrainsMono.className}`}>
+                         <span>BY EVE ARMY</span>
+                         <span className="w-1 h-1 bg-[#1a1a1a] rounded-full"></span>
+                         <span>NEW YORK ({new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase()})</span>
+                       </div>
+                    </div>
+
+                    <div className="border border-[#1a1a1a] p-1">
+                      <div className="aspect-[4/3] relative overflow-hidden bg-[#d1cdc2]">
+                        <img 
+                          src="/Users/logeshrajappa/.gemini/antigravity/brain/cea95b15-f233-47de-9696-0e58b6b7a39d/insect_decline_newspaper_1774327560270.png" 
+                          alt="Featured Illustration" 
+                          className="w-full h-full object-cover grayscale contrast-125"
+                        />
+                      </div>
+                      <div className="py-2 text-center text-[8px] font-bold uppercase tracking-widest opacity-60 italic">
+                        Visualizing the impact of {trends[0].trend_name.split(' ')[0]} in real-time
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-8">
+                       <p className="drop-cap text-lg leading-relaxed text-justify hyphens-auto">
+                         {trends[0].summary} {trends[0].summary.split('.')[0]}
+                       </p>
+                       
+                       <div className="flex flex-col md:flex-row gap-8 items-start">
+                          <blockquote className="flex-1 border-y border-[#1a1a1a] py-6 px-4">
+                            <p className="text-2xl font-black italic leading-tight text-center">
+                              "The ledger does not lie. The sentiment of this dispatch is clear."
+                            </p>
+                          </blockquote>
+                          <div className="flex-1 text-xs leading-relaxed italic opacity-80">
+                            Further data aggregation from the centroid tweet {trends[0].centroid_tweet_id} indicates a coordinated wave of activity within the cluster {trends[0].cluster_id}. Our desk recommends extreme caution as the cycle progresses.
+                          </div>
+                       </div>
+                    </div>
+                  </article>
+                )}
+              </section>
+
+              {/* RIGHT SIDEBAR: NEWSLETTER & SIDE STORIES (Trends 7-10) */}
+              <aside className="md:col-span-3 space-y-12">
+                <div className="border border-[#1a1a1a] p-6 text-center space-y-4">
+                  <h3 className="text-3xl font-black leading-none">The Daily Dispatch</h3>
+                  <p className="text-[10px] italic leading-tight opacity-70">
+                    Receive the morrow's intelligence and exclusive predictions directly to your telegraph office.
+                  </p>
+                  <div className="pt-2">
+                    <input 
+                      type="text" 
+                      placeholder="Your electronic address" 
+                      className="w-full bg-transparent border-b border-[#1a1a1a] py-2 text-xs italic text-center focus:outline-none"
+                    />
+                    <button className="w-full bg-[#1a1a1a] text-[#f4f1ea] py-3 text-[10px] font-bold uppercase tracking-[0.3em] mt-4 hover:opacity-90">
+                      SUBSCRIBE
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#1a1a1a] text-[#f4f1ea] p-6 shadow-[8px_8px_0px_#d1cdc2]">
+                  <div className="text-[8px] font-bold tracking-[0.3em] uppercase opacity-60 mb-8 border-b border-[#f4f1ea]/20 pb-2">THE FEDERAL RESERVE</div>
+                  <div className="text-center py-4">
+                    <div className="text-6xl font-black tracking-tighter text-[#d4af37]">HOLD</div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] mt-4 opacity-80">CONSENSUS 95%</div>
+                  </div>
+                  <button className="w-full border border-[#f4f1ea]/30 py-2 text-[8px] font-bold uppercase tracking-widest mt-8 hover:bg-[#f4f1ea]/10">
+                    SEE PREDICTIONS
+                  </button>
+                </div>
+
+                <div className="space-y-8">
+                  {trends.slice(7, 10).map((trend, i) => (
+                    <article key={i} className="space-y-3">
+                      <h4 className="font-bold text-sm leading-tight uppercase underline underline-offset-4 decoration-1">
+                        {trend.trend_name}
+                      </h4>
+                      <p className="text-[10px] leading-tight opacity-80">
+                        {trend.summary.slice(0, 100)}...
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </aside>
+            </div>
+
+            <div className="newspaper-divider"></div>
+
+            {/* SEPARATE CARDS SECTION (Rest of Trends) */}
+            <section className="space-y-12">
+              <div className="flex items-center gap-8">
+                <div className="h-px bg-[#1a1a1a] flex-1"></div>
+                <h2 className={`text-sm font-black tracking-[0.5em] uppercase ${jetbrainsMono.className}`}>
+                  LATEST DISPATCHES
+                </h2>
+                <div className="h-px bg-[#1a1a1a] flex-1"></div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
+                {trends.slice(10).map((trend, idx) => (
                   <article 
                     key={idx} 
-                    className={`${getGridSpan(trend.heat_score)} group relative`}
+                    className="group relative"
                   >
                     <div className={`h-full border border-[#1a1a1a] p-6 shadow-[4px_4px_0px_#1a1a1a] group-hover:shadow-[8px_8px_0px_#1a1a1a] transition-all ${getSentimentStyle(trend.sentiment)}`}>
                       <div className="flex justify-between items-start mb-4">
@@ -196,19 +349,16 @@ export default function LiveTrendsPage() {
                         </span>
                       </div>
 
-                      <h2 className={`font-bold leading-[1.1] group-hover:underline underline-offset-4 decoration-2 mb-4 
-                        ${trend.heat_score >= 9 ? 'text-4xl lg:text-6xl' : 
-                          trend.heat_score >= 7 ? 'text-3xl lg:text-4xl' : 'text-xl lg:text-2xl'}`}
-                      >
+                      <h2 className="font-bold text-2xl leading-[1.1] group-hover:underline underline-offset-4 decoration-2 mb-4 uppercase">
                         {trend.trend_name}
                       </h2>
 
-                      <p className={`text-[#333] leading-relaxed text-justify hyphens-auto ${trend.heat_score >= 8 ? 'drop-cap text-lg' : 'text-sm'}`}>
+                      <p className="text-[#333] text-sm leading-relaxed text-justify hyphens-auto">
                         {trend.summary}
                       </p>
 
                       <div className={`mt-6 pt-4 border-t border-[#1a1a1a]/10 flex justify-between items-center text-[10px] font-bold ${jetbrainsMono.className}`}>
-                        <span className="opacity-50">TRANSCRIPT REF: {trend.centroid_tweet_id.slice(-6)}</span>
+                        <span className="opacity-50">REF: {trend.centroid_tweet_id.slice(-6)}</span>
                         <motion.button 
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
@@ -221,38 +371,7 @@ export default function LiveTrendsPage() {
                   </article>
                 ))}
               </div>
-            </div>
-
-            {/* Right Sidebar Ad Columns */}
-            <aside className="hidden lg:block w-[300px] space-y-8">
-              <div className="sticky top-20">
-                <div className="border border-[#1a1a1a] p-4 bg-white shadow-[4px_4px_0px_#1a1a1a]">
-                  <h3 className={`text-center text-xs font-bold border-b border-[#1a1a1a] pb-2 mb-4 tracking-[0.3em] ${jetbrainsMono.className}`}>
-                    SPONSORED LINKS
-                  </h3>
-                  
-                  {/* Sidebar AD 1 */}
-                  <div className="aspect-[3/4] border border-[#d1cdc2] border-dashed mb-6 flex flex-col items-center justify-center p-6 text-center group cursor-pointer hover:bg-[#f4f1ea] transition-colors">
-                    <div className="text-[10px] text-[#999] font-mono mb-4">PREMIUM AD PLACEMENT</div>
-                    <div className="text-lg font-bold leading-tight mb-2">Build Your Next Vision Here</div>
-                    <div className="text-xs text-[#666]">Contact our desk for sponsorship opportunities.</div>
-                  </div>
-
-                  {/* Sidebar AD 2 */}
-                  <div className="aspect-square border border-[#d1cdc2] border-dashed flex flex-col items-center justify-center p-6 text-center group cursor-pointer hover:bg-[#f4f1ea] transition-colors">
-                    <div className="text-[10px] text-[#999] font-mono mb-4">PARTNER SHOWCASE</div>
-                    <div className="text-base font-bold leading-tight mb-2">EVE ANALYTICS</div>
-                    <div className="text-[10px] text-[#666] tracking-widest">REAL-TIME ALPHA PLATFORM</div>
-                  </div>
-
-                  <div className="mt-8 pt-4 border-t border-[#1a1a1a] text-center">
-                    <p className={`text-[9px] text-[#999] leading-tight ${jetbrainsMono.className}`}>
-                      © 2026 THE DAILY TREND. ALL RIGHTS RESERVED. PULSED FROM THE BLOCKCHAIN.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </aside>
+            </section>
           </div>
         )}
       </main>
