@@ -128,12 +128,6 @@ export default function ProfileWalletPage({
     "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
     "HbbEWDceTtVtV272zGKzVUQv31dE7x17Thx7qMM1xeve": 1_250_000, // $1.25M fake market cap for spawn eligibility
   };
-  // Add pre-paid agents to bonded overrides so they show as eligible
-  for (const pa of prepaidForWallet) {
-    if (TEST_MINT_BONDED_OVERRIDES[pa.mint] == null) {
-      TEST_MINT_BONDED_OVERRIDES[pa.mint] = pa.fakeMcap;
-    }
-  }
   // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
   const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
 
@@ -226,15 +220,19 @@ export default function ProfileWalletPage({
                         {coin.name} ({coin.symbol})
                       </p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-[10px] text-zinc-400">
-                          MCap: {formatMarketCap(coin.usd_market_cap)}
-                        </span>
+                        {!getPrepaidAgent(coin.mint) && (
+                          <span className="text-[10px] text-zinc-400">
+                            MCap: {formatMarketCap(coin.usd_market_cap)}
+                          </span>
+                        )}
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                            bonded ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-zinc-400"
+                            getPrepaidAgent(coin.mint)
+                              ? "bg-amber-500/20 text-amber-400"
+                              : bonded ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-zinc-400"
                           }`}
                         >
-                          {bonded ? "Bonded" : "Not bonded"}
+                          {getPrepaidAgent(coin.mint) ? "Pre-paid" : bonded ? "Bonded" : "Not bonded"}
                         </span>
                         {hasDroplet && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-400">
@@ -245,7 +243,8 @@ export default function ProfileWalletPage({
                     </div>
                     <div className="shrink-0 flex flex-col gap-1 items-end">
                       {((bonded && (hasDroplet || launch)) ||
-                        TEST_MINT_BONDED_OVERRIDES[coin.mint] != null) && (
+                        TEST_MINT_BONDED_OVERRIDES[coin.mint] != null ||
+                        getPrepaidAgent(coin.mint) != null) && (
                         <Link
                           href={`/spawn/${encodeURIComponent(coin.mint)}`}
                           className={
