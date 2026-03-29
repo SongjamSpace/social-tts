@@ -299,10 +299,17 @@ export default function SpawnContent({
     setCreatingIntent(true);
     setError(null);
     try {
-      if (!sshPublicKey) {
-        const { publicKeyOpenSSH, privateKeyPem: pem } = await generateSshKeyPair();
-        setSshPublicKey(publicKeyOpenSSH);
-        setPrivateKeyPem(pem);
+      // Generate SSH key client-side if possible
+      let pubKey = sshPublicKey;
+      if (!pubKey) {
+        try {
+          const { publicKeyOpenSSH, privateKeyPem: pem } = await generateSshKeyPair();
+          setSshPublicKey(publicKeyOpenSSH);
+          setPrivateKeyPem(pem);
+          pubKey = publicKeyOpenSSH;
+        } catch {
+          // Ed25519 not supported (wallet browser) — server will generate
+        }
       }
       const res = await fetch("/api/openclaw/spawn-intent", {
         method: "POST",
@@ -314,6 +321,32 @@ export default function SpawnContent({
         setError(typeof data?.error === "string" ? data.error : "Failed to create spawn intent");
         return;
       }
+
+      // For prepaid agents with skip-payment, go straight to spawn (no payment UI)
+      if (prepaidAgent && skipSpawnPayment) {
+        setSpawning(true);
+        setSpawnMessage("Creating droplet...");
+        const spawnRes = await fetch("/api/openclaw/spawn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mint,
+            wallet: walletAddress,
+            size: selectedSize,
+            ...(pubKey ? { sshPublicKey: pubKey } : {}),
+          }),
+        });
+        const spawnData = await spawnRes.json();
+        if (!spawnRes.ok) {
+          setError(typeof spawnData?.error === "string" ? spawnData.error : "Failed to create droplet");
+          setSpawning(false);
+        } else if (spawnData.serverKeyPair) {
+          setSshPublicKey(spawnData.serverKeyPair.publicKeyOpenSSH);
+          setPrivateKeyPem(spawnData.serverKeyPair.privateKeyPem);
+        }
+        return;
+      }
+
       setIntent({
         treasuryAddress: data.treasuryAddress ?? null,
         amountSol: data.amountSol ?? AMOUNT_BY_SIZE[selectedSize],
