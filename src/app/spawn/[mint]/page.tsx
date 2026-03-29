@@ -715,25 +715,23 @@ KEY`;
     <div className="min-h-[calc(100vh-3.5rem)] bg-[#060608] text-white px-4 py-8">
       <div className="max-w-md mx-auto">
         <h1 className="text-xl font-bold text-white mb-2">
-          {prepaidAgent ? `Set up ${prepaidAgent.name}` : "Spawn droplet"}
+          {prepaidAgent ? "Set up " + prepaidAgent.name : "Spawn droplet"}
         </h1>
         <p className="text-zinc-500 text-sm mb-6">
           {prepaidAgent
-            ? `Your ${prepaidAgent.name} agent is ready to set up on a ${prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} VPS — no payment required.`
+            ? "Your " + prepaidAgent.name + " agent is ready to set up on a " + (prepaidAgent.size === "4gb" ? "4 GB" : "2 GB") + " VPS. No payment required."
             : "Choose a droplet size and pay in SOL. You can access your OpenClaw agent via Agent Connect, just download the app and open the .droplet file. Currently only supports Android and macOS."}
         </p>
-        {error && <p className="text-red-400 text-sm mb-4">{typeof error === "string" ? error : String(error)}</p>}
+        {error != null && <p className="text-red-400 text-sm mb-4">{String(error)}</p>}
 
         {!intent ? (
-          prepaidAgent ? (
+          prepaidAgent != null ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
             <div className="flex items-center gap-3">
-              {prepaidAgent.imageUrl && (
-                <img src={prepaidAgent.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-white/10" />
-              )}
+              <img src={String(prepaidAgent.imageUrl)} alt="" className="w-12 h-12 rounded-lg object-cover border border-white/10" />
               <div>
-                <p className="font-semibold text-white">{prepaidAgent.name} ({prepaidAgent.ticker})</p>
-                <p className="text-zinc-400 text-xs">{prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} RAM — Pre-paid</p>
+                <p className="font-semibold text-white">{String(prepaidAgent.name)} ({String(prepaidAgent.ticker)})</p>
+                <p className="text-zinc-400 text-xs">{prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} RAM - Pre-paid</p>
               </div>
             </div>
             <button
@@ -742,7 +740,7 @@ KEY`;
               disabled={creatingIntent}
               className="w-full rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-bold py-3 px-4 text-sm"
             >
-              {creatingIntent ? "Preparing…" : "Set up agent"}
+              {creatingIntent ? "Preparing..." : "Set up agent"}
             </button>
             <p className="text-zinc-500 text-xs">
               Your VPS has been pre-paid. Click above to start provisioning.

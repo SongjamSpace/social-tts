@@ -37,6 +37,13 @@ const PREPAID_AGENTS = [
     ticker: "$MAYOR",
     imageUrl: "https://firebasestorage.googleapis.com/v0/b/moltspaces.firebasestorage.app/o/openclaw%2Fmayor.jpeg?alt=media&token=f5420725-68c7-4051-85d1-ca41b071f4d7",
   },
+  {
+    mint: "prepaid_mayor_Fh9ADtb7",
+    wallet: "Fh9ADtb7JPTmst7y3Gegt5FaPv4Re5vibPGJf3WWLkDL",
+    name: "Mayor",
+    ticker: "$MAYOR",
+    imageUrl: "https://firebasestorage.googleapis.com/v0/b/moltspaces.firebasestorage.app/o/openclaw%2Fmayor.jpeg?alt=media&token=f5420725-68c7-4051-85d1-ca41b071f4d7",
+  },
 ];
 
 const projectId = process.env.NEXT_PUBLIC_FB_PROJECT_ID;
