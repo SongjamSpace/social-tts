@@ -248,7 +248,7 @@ export default function SpawnPage({
           }
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e ?? "Failed to load"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -272,7 +272,7 @@ export default function SpawnPage({
         }
         if (data.status === "deleted") {
           setSpawning(false);
-          setError(data?.message ?? "Droplet was removed.");
+          setError(typeof data?.message === "string" ? data.message : "Droplet was removed.");
           return;
         }
         if (data.message) setSpawnMessage(data.message);
@@ -302,7 +302,7 @@ export default function SpawnPage({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data?.error ?? "Failed to create spawn intent");
+        setError(typeof data?.error === "string" ? data.error : "Failed to create spawn intent");
         return;
       }
       setIntent({
@@ -312,7 +312,7 @@ export default function SpawnPage({
         size: selectedSize,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create intent");
+      setError(e instanceof Error ? e.message : String(e ?? "Failed to create intent"));
     } finally {
       setCreatingIntent(false);
     }
@@ -386,7 +386,7 @@ export default function SpawnPage({
           });
           const spawnData = await spawnRes.json();
           if (!spawnRes.ok) {
-            setError(spawnData?.error ?? "Failed to create droplet");
+            setError(typeof spawnData?.error === "string" ? spawnData.error : "Failed to create droplet");
             setSpawning(false);
           }
           return;
@@ -394,7 +394,7 @@ export default function SpawnPage({
       }
       if (pollingPayment) setError("Payment not detected yet. Check your wallet and try refreshing.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Payment failed");
+      setError(e instanceof Error ? e.message : String(e ?? "Payment failed"));
     } finally {
       setSending(false);
       setPollingPayment(false);
@@ -543,7 +543,7 @@ KEY`;
                           });
                           const data = await res.json().catch(() => ({}));
                           if (!res.ok) {
-                            setError((data?.error as string) || "Failed to prepare download. Try again.");
+                            setError(typeof data?.error === "string" ? data.error : "Failed to prepare download. Try again.");
                             return;
                           }
                           const token = data?.token as string | undefined;
@@ -722,7 +722,7 @@ KEY`;
             ? `Your ${prepaidAgent.name} agent is ready to set up on a ${prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} VPS — no payment required.`
             : "Choose a droplet size and pay in SOL. You can access your OpenClaw agent via Agent Connect, just download the app and open the .droplet file. Currently only supports Android and macOS."}
         </p>
-        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        {error && <p className="text-red-400 text-sm mb-4">{typeof error === "string" ? error : String(error)}</p>}
 
         {!intent ? (
           prepaidAgent ? (

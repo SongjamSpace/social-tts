@@ -17,7 +17,7 @@ export default function Error({
   return (
     <div className="min-h-[50vh] flex flex-col items-center justify-center px-4 text-center bg-[#060608] text-white">
       <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
-      <p className="text-zinc-400 text-sm mb-4 max-w-md">{error.message}</p>
+      <p className="text-zinc-400 text-sm mb-4 max-w-md">{typeof error.message === "string" ? error.message : "An unexpected error occurred."}</p>
       <div className="flex gap-3">
         <button
           type="button"
