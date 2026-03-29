@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { getPrepaidAgentsForWallet, getPrepaidAgent } from "@/lib/prepaid-agents";
 
 interface Coin {
   mint: string;
@@ -76,7 +77,24 @@ export default function ProfileWalletPage({
           dropletIp: null,
         }
       : null;
-  const effectiveLaunches = devLaunch ? [...launches, devLaunch] : launches;
+  const baseLaunches = devLaunch ? [...launches, devLaunch] : [...launches];
+
+  // Inject pre-paid agents for this wallet (production-safe, wallet-scoped)
+  const prepaidForWallet = getPrepaidAgentsForWallet(wallet ?? "");
+  for (const pa of prepaidForWallet) {
+    if (!baseLaunches.some((l) => l.mint === pa.mint)) {
+      baseLaunches.push({
+        mint: pa.mint,
+        creator: wallet ?? "",
+        seedPayload: { name: pa.name, ticker: pa.ticker, imageUrl: pa.imageUrl },
+        createdAt: null,
+        agentUrl: null,
+        hatchStatus: null,
+        dropletIp: null,
+      });
+    }
+  }
+  const effectiveLaunches = baseLaunches;
 
   const launchByMint = new Map(effectiveLaunches.map((l) => [l.mint, l]));
   const coinByMint = new Map(coins.map((c) => [c.mint, c]));
@@ -110,6 +128,12 @@ export default function ProfileWalletPage({
     "3nWgb7QMtUziSc7qXkxAGrxPdqU7RaMJah4bC7aoseve": 286_000,
     "HbbEWDceTtVtV272zGKzVUQv31dE7x17Thx7qMM1xeve": 1_250_000, // $1.25M fake market cap for spawn eligibility
   };
+  // Add pre-paid agents to bonded overrides so they show as eligible
+  for (const pa of prepaidForWallet) {
+    if (TEST_MINT_BONDED_OVERRIDES[pa.mint] == null) {
+      TEST_MINT_BONDED_OVERRIDES[pa.mint] = pa.fakeMcap;
+    }
+  }
   // Testing: show Agent Connect for this mint, Spawn droplet for others in TEST_MINT_BONDED_OVERRIDES (no Firestore launch needed)
   const TEST_MINT_AGENT_CONNECT = "GGbtYtBp9i6PpGPgMFz3nPvMovs5d1bmkKjcQYY8seve";
 
@@ -232,17 +256,21 @@ export default function ProfileWalletPage({
                         >
                           {hasDroplet || coin.mint === TEST_MINT_AGENT_CONNECT
                             ? "Agent Connect"
+                            : getPrepaidAgent(coin.mint)
+                            ? "Set up agent"
                             : "Spawn droplet"}
                         </Link>
                       )}
-                      <a
-                        href={`https://pump.fun/coin/${coin.mint}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] text-zinc-500 hover:text-zinc-400"
-                      >
-                        View on pump.fun
-                      </a>
+                      {!getPrepaidAgent(coin.mint) && (
+                        <a
+                          href={`https://pump.fun/coin/${coin.mint}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-zinc-500 hover:text-zinc-400"
+                        >
+                          View on pump.fun
+                        </a>
+                      )}
                     </div>
                   </li>
                 );
@@ -251,7 +279,7 @@ export default function ProfileWalletPage({
           )}
         </section>
 
-        <footer className="mt-12 pt-6 border-t border-white/5 text-center text-[10px] text-zinc-600">
+        <nav className="mt-12 text-center text-[10px] text-zinc-600" aria-label="Quick links">
           <Link href="/" className="hover:text-zinc-400">
             Eve
           </Link>
@@ -259,7 +287,7 @@ export default function ProfileWalletPage({
           <Link href="/openclaw" className="hover:text-zinc-400">
             OpenClaw
           </Link>
-        </footer>
+        </nav>
       </div>
     </div>
   );
