@@ -4,6 +4,7 @@ import "./globals.css";
 import { ProvidersWithRoute } from "@/components/ProvidersWithRoute";
 import { ToastProvider } from "@/contexts/ToastContext";
 import Navbar from "@/components/Navbar";
+import SiteFooter from "@/components/SiteFooter";
 
 
 const dmSans = DM_Sans({
@@ -44,8 +45,11 @@ export default function RootLayout({
       <body className={`${dmSans.variable} ${jetbrainsMono.variable} ${dmSans.className} antialiased bg-[#060608]`}>
         <ToastProvider>
           <ProvidersWithRoute>
-            <Navbar />
-            {children}
+            <div className="min-h-dvh flex flex-col bg-[#060608]">
+              <Navbar />
+              <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+              <SiteFooter />
+            </div>
           </ProvidersWithRoute>
         </ToastProvider>
       </body>
