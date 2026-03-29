@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallets, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } from "@solana/web3.js";
+import { getPrepaidAgent } from "@/lib/prepaid-agents";
 
 const LAMPORTS_PER_SOL = 1e9;
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -318,6 +319,7 @@ export default function SpawnPage({
   };
 
   const skipSpawnPayment = process.env.NEXT_PUBLIC_OPENCLAW_SKIP_SPAWN_PAYMENT === "true" || process.env.NEXT_PUBLIC_OPENCLAW_SKIP_SPAWN_PAYMENT === "1";
+  const prepaidAgent = mint ? getPrepaidAgent(mint) : undefined;
 
   const sendPayment = async () => {
     if (!mint || !walletAddress || !intent?.treasuryAddress) {
@@ -701,17 +703,52 @@ KEY`;
     );
   }
 
+  // Auto-select size for pre-paid agents
+  useEffect(() => {
+    if (prepaidAgent && !selectedSize) {
+      setSelectedSize(prepaidAgent.size);
+    }
+  }, [prepaidAgent, selectedSize]);
+
   // Choose size or payment
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-[#060608] text-white px-4 py-8">
       <div className="max-w-md mx-auto">
-        <h1 className="text-xl font-bold text-white mb-2">Spawn droplet</h1>
+        <h1 className="text-xl font-bold text-white mb-2">
+          {prepaidAgent ? `Set up ${prepaidAgent.name}` : "Spawn droplet"}
+        </h1>
         <p className="text-zinc-500 text-sm mb-6">
-          Choose a droplet size and pay in SOL. You can access your OpenClaw agent via Agent Connect, just download the app and open the .droplet file. Currently only supports Android and macOS.
+          {prepaidAgent
+            ? `Your ${prepaidAgent.name} agent is ready to set up on a ${prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} VPS — no payment required.`
+            : "Choose a droplet size and pay in SOL. You can access your OpenClaw agent via Agent Connect, just download the app and open the .droplet file. Currently only supports Android and macOS."}
         </p>
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
         {!intent ? (
+          prepaidAgent ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              {prepaidAgent.imageUrl && (
+                <img src={prepaidAgent.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-white/10" />
+              )}
+              <div>
+                <p className="font-semibold text-white">{prepaidAgent.name} ({prepaidAgent.ticker})</p>
+                <p className="text-zinc-400 text-xs">{prepaidAgent.size === "4gb" ? "4 GB" : "2 GB"} RAM — Pre-paid</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={createIntent}
+              disabled={creatingIntent}
+              className="w-full rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-bold py-3 px-4 text-sm"
+            >
+              {creatingIntent ? "Preparing…" : "Set up agent"}
+            </button>
+            <p className="text-zinc-500 text-xs">
+              Your VPS has been pre-paid. Click above to start provisioning.
+            </p>
+          </div>
+          ) : (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
             <p className="text-zinc-400 text-sm">Select RAM size</p>
             <div className="grid grid-cols-2 gap-3">
@@ -752,6 +789,7 @@ KEY`;
               {creatingIntent ? "Preparing…" : "Spawn droplet"}
             </button>
           </div>
+          )
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
             <p className="text-zinc-400 text-sm">
