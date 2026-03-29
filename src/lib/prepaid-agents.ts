@@ -5,12 +5,9 @@ export interface PrepaidAgent {
   wallet: string;
   name: string;
   ticker: string;
-  /** Path served from /public, e.g. "https://firebasestorage.googleapis.com/v0/b/moltspaces.firebasestorage.app/o/openclaw%2Fmayor.jpeg?alt=media&token=f5420725-68c7-4051-85d1-ca41b071f4d7". */
   imageUrl: string;
   /** Droplet size to auto-select. */
   size: "2gb" | "4gb";
-  /** Fake market cap shown on profile card. */
-  fakeMcap: number;
 }
 
 export const PREPAID_AGENTS: PrepaidAgent[] = [
@@ -21,7 +18,6 @@ export const PREPAID_AGENTS: PrepaidAgent[] = [
     ticker: "$MAYOR",
     imageUrl: "https://firebasestorage.googleapis.com/v0/b/moltspaces.firebasestorage.app/o/openclaw%2Fmayor.jpeg?alt=media&token=f5420725-68c7-4051-85d1-ca41b071f4d7",
     size: "4gb",
-    fakeMcap: 100_000,
   },
 ];
 
