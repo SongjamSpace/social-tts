@@ -378,10 +378,20 @@ export default function SpawnContent({
           setSpawnMessage("Creating droplet…");
           setPollingPayment(false);
           setSending(false);
-          // One key pair per spawn: generate at spawn time so the key we send and the .droplet always match.
-          const { publicKeyOpenSSH, privateKeyPem: pem } = await generateSshKeyPair();
-          setSshPublicKey(publicKeyOpenSSH);
-          setPrivateKeyPem(pem);
+          // Generate SSH key pair client-side if possible; server will generate if not.
+          let clientPubKey: string | undefined;
+          let clientPrivKey: string | undefined;
+          try {
+            const kp = await generateSshKeyPair();
+            clientPubKey = kp.publicKeyOpenSSH;
+            clientPrivKey = kp.privateKeyPem;
+          } catch {
+            // Ed25519 not supported in this browser (e.g. wallet in-app browser) — server will generate
+          }
+          if (clientPubKey) {
+            setSshPublicKey(clientPubKey);
+            setPrivateKeyPem(clientPrivKey!);
+          }
           const spawnRes = await fetch("/api/openclaw/spawn", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -389,13 +399,17 @@ export default function SpawnContent({
               mint,
               wallet: walletAddress,
               size: paidSize,
-              sshPublicKey: publicKeyOpenSSH,
+              ...(clientPubKey ? { sshPublicKey: clientPubKey } : {}),
             }),
           });
           const spawnData = await spawnRes.json();
           if (!spawnRes.ok) {
             setError(typeof spawnData?.error === "string" ? spawnData.error : "Failed to create droplet");
             setSpawning(false);
+          } else if (spawnData.serverKeyPair) {
+            // Server generated the key pair (client browser didn't support Ed25519)
+            setSshPublicKey(spawnData.serverKeyPair.publicKeyOpenSSH);
+            setPrivateKeyPem(spawnData.serverKeyPair.privateKeyPem);
           }
           return;
         }
